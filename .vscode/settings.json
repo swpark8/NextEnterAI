@@ -1,0 +1,30 @@
+{
+  "java.configuration.updateBuildConfiguration": "disabled",
+  "java.dependency.showMembers": false,
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.compile.nullAnalysis.nonnull": [],
+  "java.compile.nullAnalysis.nullable": [],
+  "java.errors.incompleteClasspath.severity": "ignore",
+
+  // 경고 무시 설정
+  "java.warnings.enable": false,
+  "java.compile.nullAnalysis.severity": "ignore",
+  "problems.showCurrentInStatus": false,
+  "spring-boot.ls.problem.boot-version-validation.enabled": false,
+
+  "java.compile.nullAnalysis.diagnostics": {
+    "redundantNullAnnotation": "ignore",
+    "uncheckedConversion": "ignore",
+    "unusedImport": "ignore",
+    "unusedPrivateField": "ignore",
+    "unusedLocalVariable": "ignore"
+  },
+
+  // Python/basedpyright 설정 추가
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "basedpyright.analysis.typeCheckingMode": "basic",
+  "basedpyright.analysis.diagnosticMode": "workspace",
+  "basedpyright.analysis.reportMissingImports": "none"
+}
