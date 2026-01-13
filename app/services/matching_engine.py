@@ -33,6 +33,13 @@ class MatchingEngine:
     def __init__(self, base_path: str = "./data", openai_api_key: Optional[str] = None):
         print("🚀 매칭 엔진(Matching Engine) 초기화 중...")
         
+        # 모든 속성 사전 초기화 (어떤 경로로 종료되든 속성 존재 보장)
+        self.model = None
+        self.company_vectors = None
+        self.company_metadata = []
+        self.client = None
+        self.base_path = base_path
+        
         # 1. 라이브러리 체크
         if not SentenceTransformer:
             print("⚠️ [Critical] sentence_transformers 라이브러리가 없습니다.")
@@ -44,8 +51,6 @@ class MatchingEngine:
         self.client = OpenAI(api_key=api_key) if api_key else None
         if not self.client:
             print("⚠️ [Warning] OpenAI API Key가 없습니다. AI 리포트 기능이 제한됩니다.")
-
-        self.base_path = base_path
         
         # 3. 데이터 및 모델 로드
         try:
@@ -79,13 +84,14 @@ class MatchingEngine:
             print(f"❌ 초기화 중 에러 발생: {e}")
             self.model = None
             self.company_vectors = None
+            self.company_metadata = []
 
     def recommend(self, resume_data: Dict[str, Any]) -> Tuple[List[Dict], str]:
         """
         이력서 데이터를 받아 추천 기업 리스트와 AI 리포트를 반환
         규칙: 1, 2위는 Target Role 일치(Exact), 3위는 유연한 추천(Flexible)
         """
-        if not self.model or self.company_vectors is None:
+        if not self.model or self.company_vectors is None or not self.company_metadata:
             return [], "⚠️ 매칭 엔진이 정상적으로 초기화되지 않았습니다."
 
         # 1. 이력서 정보 추출
