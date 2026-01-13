@@ -1,0 +1,312 @@
+[
+    {
+        "jd_id": "BE_JAVA_SR",
+        "job_title": "Senior Java Developer",
+        "company_info": {
+            "company_name": "Toss",
+            "industry": "Fintech",
+            "location": "서울 강남구",
+            "culture_tags": [
+                "실무중심",
+                "기술공유 활발",
+                "높은 보상"
+            ],
+            "salary_level": "Top-tier"
+        },
+        "responsibilities": [
+            "MSA 기반 결제 시스템 설계 및 고도화",
+            "Kafka를 이용한 대규모 트래픽 분산 처리",
+            "DB 샤딩 및 쿼리 최적화로 성능 개선"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "Java 17",
+                "Spring Boot",
+                "JPA"
+            ],
+            "preferred_tech_stack": [
+                "Kafka",
+                "Redis",
+                "Docker",
+                "Kubernetes"
+            ],
+            "min_experience_years": 7,
+            "job_level": "Senior"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "대규모 트래픽 경험",
+                "금융 도메인 지식",
+                "분산 아키텍처 설계"
+            ],
+            "kpi_targets": [
+                "응답속도(Latancy) 개선",
+                "TPS(초당 트랜잭션) 최적화"
+            ],
+            "kpi_enforcement_rule": "성과 지표에 반드시 'ms' 단위의 속도 개선 수치와 'TPS' 수치를 구체적으로 포함할 것 (예: 200ms -> 50ms 개선, 5000 TPS 처리 등)"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.5,
+            "professional_experience": 0.3,
+            "education": 0.1,
+            "project_fit": 0.1
+        }
+    },
+    {
+        "jd_id": "FE_REACT_MID",
+        "job_title": "Middle React Developer",
+        "company_info": {
+            "company_name": "당근(Daangn)",
+            "industry": "E-commerce",
+            "location": "서울 서초구",
+            "culture_tags": [
+                "워라밸 최상",
+                "자율적 문화",
+                "사용자 중심"
+            ],
+            "salary_level": "High"
+        },
+        "responsibilities": [
+            "React 기반 웹 프론트엔드 설계 및 개발",
+            "Lighthouse 지표 기반 성능 최적화",
+            "디자인 시스템 구축 및 공통 컴포넌트 라이브러리 관리"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "React",
+                "TypeScript",
+                "Next.js"
+            ],
+            "preferred_tech_stack": [
+                "Tailwind CSS",
+                "Redux",
+                "React Query"
+            ],
+            "min_experience_years": 3,
+            "job_level": "Middle"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "웹 성능 최적화",
+                "컴포넌트 설계 능력",
+                "UX 개선 경험"
+            ],
+            "kpi_targets": [
+                "Lighthouse 점수 향상",
+                "FCP/LCP 시간 단축"
+            ],
+            "kpi_enforcement_rule": "Lighthouse 점수 변화(예: 60점 -> 95점)와 FCP/LCP 초 단위 수치(예: 3.5s -> 1.2s)를 반드시 포함할 것"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.4,
+            "professional_experience": 0.4,
+            "education": 0.1,
+            "project_fit": 0.1
+        }
+    },
+    {
+        "jd_id": "AI_LLM_SR",
+        "job_title": "Senior NLP Engineer",
+        "company_info": {
+            "company_name": "Naver",
+            "industry": "IT Portal",
+            "location": "경기도 성남시",
+            "culture_tags": [
+                "연구 중심",
+                "대규모 인프라",
+                "복지 우수"
+            ],
+            "salary_level": "Top"
+        },
+        "responsibilities": [
+            "LLM 서빙 및 모델 경량화(Quantization)",
+            "RAG 파이프라인 구축 및 고도화",
+            "Transformer 기반 모델 학습 데이터셋 정제"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "Python",
+                "PyTorch",
+                "Transformer"
+            ],
+            "preferred_tech_stack": [
+                "LangChain",
+                "Vector DB",
+                "CUDA",
+                "Triton"
+            ],
+            "min_experience_years": 5,
+            "job_level": "Senior"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "LLM 파인튜닝",
+                "자연어 처리 지식",
+                "모델 최적화"
+            ],
+            "kpi_targets": [
+                "Inference 속도 개선",
+                "RAG 정확도(Hit Rate) 향상"
+            ],
+            "kpi_enforcement_rule": "모델 추론 속도(ms) 및 RAG 정확도 백분율(%) 변화 수치를 반드시 포함할 것"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.6,
+            "professional_experience": 0.2,
+            "education": 0.1,
+            "project_fit": 0.1
+        }
+    },
+    {
+        "jd_id": "FS_JS_MID",
+        "job_title": "Middle Fullstack Developer (Node/React)",
+        "company_info": {
+            "company_name": "배달의민족",
+            "industry": "FoodTech",
+            "location": "서울 송파구",
+            "culture_tags": [
+                "코드리뷰 활발",
+                "수평적 구조"
+            ],
+            "salary_level": "High"
+        },
+        "responsibilities": [
+            "E2E 제품 설계 및 개발",
+            "RESTful API 설계 및 DB 모델링",
+            "서버리스 아키텍처 구축 및 인프라 운영"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "Node.js",
+                "React",
+                "TypeScript"
+            ],
+            "preferred_tech_stack": [
+                "AWS (Lambda/S3)",
+                "GraphQL",
+                "Docker",
+                "CI/CD"
+            ],
+            "min_experience_years": 4,
+            "job_level": "Middle"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "E2E 개발 경험",
+                "빠른 프로토타이핑 능력"
+            ],
+            "kpi_targets": [
+                "배포 주기 단축",
+                "API 응답 안정성 확보"
+            ],
+            "kpi_enforcement_rule": "배포 주기 단축 비율(%) 또는 시간(day), API 성공률(99.9% 등) 수치를 반드시 포함할 것"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.4,
+            "professional_experience": 0.4,
+            "education": 0.1,
+            "project_fit": 0.1
+        }
+    },
+    {
+        "jd_id": "UI_UX_MID",
+        "job_title": "UI/UX Designer",
+        "company_info": {
+            "company_name": "직방",
+            "industry": "PropTech",
+            "location": "서울 서초구",
+            "culture_tags": [
+                "디자인 시스템 중시",
+                "데이터 기반 의사결정"
+            ],
+            "salary_level": "Standard"
+        },
+        "responsibilities": [
+            "사용자 리서치 기반 UX 시나리오 설계",
+            "Figma를 활용한 고수준의 UI 디자인",
+            "전사 공통 디자인 시스템 고도화"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "Figma",
+                "Prototyping",
+                "User Research"
+            ],
+            "preferred_tech_stack": [
+                "Adobe Creative Cloud",
+                "Framer",
+                "Basic CSS"
+            ],
+            "min_experience_years": 3,
+            "job_level": "Middle"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "디자인 시스템 구축",
+                "데이터 기반 디자인"
+            ],
+            "kpi_targets": [
+                "전환율(CVR) 개선",
+                "이탈률 감소"
+            ],
+            "kpi_enforcement_rule": "CVR 상승 수치(%) 또는 이탈률 감소 수치(%)를 구체적인 데이터로 반드시 포함할 것"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.3,
+            "professional_experience": 0.3,
+            "education": 0.1,
+            "project_fit": 0.3
+        }
+    },
+    {
+        "jd_id": "PM_PLATFORM_MID",
+        "job_title": "서비스 기획자 (PO/PM)",
+        "company_info": {
+            "company_name": "카카오(Kakao)",
+            "industry": "IT Platform",
+            "location": "경기도 성남시",
+            "culture_tags": [
+                "자율직무제",
+                "사용자 경험 중심"
+            ],
+            "salary_level": "High"
+        },
+        "responsibilities": [
+            "신규 서비스 비즈니스 로직 설계 및 제품 로드맵 수립",
+            "데이터 기반 KPI 설정 및 지표 분석",
+            "유관 부서(개발/디자인) 요구사항 조율 및 일정 관리"
+        ],
+        "requirements": {
+            "required_tech_stack": [
+                "데이터 분석 역량",
+                "지표 설정 능력",
+                "Figma"
+            ],
+            "preferred_tech_stack": [
+                "SQL",
+                "Agile 방법론",
+                "Amplitude"
+            ],
+            "min_experience_years": 4,
+            "job_level": "Middle"
+        },
+        "domain_specific": {
+            "must_have_keywords": [
+                "문제 정의 능력",
+                "비즈니스 모델 이해",
+                "커뮤니케이션"
+            ],
+            "kpi_targets": [
+                "서비스 리텐션 향상",
+                "신규 유입 증가"
+            ],
+            "kpi_enforcement_rule": "리텐션(Retention) 상승 수치(%) 또는 신규 유입자 수 증가(명, %) 데이터를 반드시 포함할 것"
+        },
+        "evaluation_weights": {
+            "technical_skill": 0.2,
+            "professional_experience": 0.4,
+            "education": 0.1,
+            "project_fit": 0.3
+        }
+    }
+]
