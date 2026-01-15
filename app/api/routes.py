@@ -7,7 +7,7 @@ from app.dto import (
 )
 # 각 서비스 모듈 가져오기 (Stub이나 구현된 파일이 있어야 함)
 from app.services.ai_analyzer import ai_analyzer
-from app.services.matching_engine import matching_engine
+from app.services.resume_validation_engine import resume_validation_engine
 from app.core.text_processor import TextProcessor
 
 # 라우터 객체 생성 (이게 있어야 main.py에서 import 가능!)
@@ -38,7 +38,7 @@ async def recommend_jobs(resume: ResumeInputDTO):
     이력서 정보(JSON)를 바탕으로 가장 적합한 기업 3곳을 추천하고 AI 리포트를 제공합니다.
     """
     try:
-        companies, report = matching_engine.recommend(resume.dict())
+        companies, report = resume_validation_engine.recommend(resume.dict())
         
         # 프론트엔드용 데이터 변환
         formatted_companies = []
