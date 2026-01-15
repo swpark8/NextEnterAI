@@ -46,4 +46,31 @@ class ResumeInputDTO(BaseModel):
     id: str
     target_role: str
     resume_content: Dict[str, Any] 
-    # 예: { "skills": ["Java"], "experience": [...] }
+    
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "id": "TEST_USER_001",
+                    "target_role": "Backend Developer",
+                    "resume_content": {
+                        "education": [
+                            {"degree": "Bachelor", "major": "Computer Science", "status": "Graduated"}
+                        ],
+                        "skills": {
+                            "essential": ["Python", "FastAPI", "SQL"],
+                            "additional": ["Docker", "AWS"]
+                        },
+                        "professional_experience": [
+                            {
+                                "company": "Tech Corp",
+                                "period": "2020-2023",
+                                "role": "Software Engineer",
+                                "key_tasks": ["API Development", "Database Design"]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
