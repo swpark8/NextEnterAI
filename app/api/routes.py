@@ -68,7 +68,7 @@ async def extract_text(file: UploadFile = File(...)):
     """
     try:
         contents = await file.read()
-        text = TextProcessor.extract_from_file(contents, file.filename)
+        text = TextProcessor.extract_from_file(contents, file.filename or "")
         
         return {
             "filename": file.filename, 
