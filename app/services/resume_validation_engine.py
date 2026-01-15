@@ -6,11 +6,27 @@ from pathlib import Path
 # ==========================================
 # 1. 데이터 로드 (경로 및 로딩 확인 강화)
 # ==========================================
+def get_project_root() -> Path:
+    """
+    프로젝트 루트 디렉토리를 반환합니다.
+    현재 파일 위치를 기준으로 프로젝트 루트를 찾습니다.
+    """
+    current_file = Path(__file__).resolve()
+    # app/services/resume_validation_engine.py -> 프로젝트 루트
+    # 2단계 위로 올라가면 프로젝트 루트
+    return current_file.parent.parent.parent
+
+def get_data_path() -> Path:
+    """
+    데이터 디렉토리 경로를 반환합니다.
+    """
+    return get_project_root() / "app" / "data"
+
 class DataLoader:
     def __init__(self):
-        # 1. 데이터 파일이 위치한 실제 절대 경로 설정
-        # 선생님의 환경에 맞춰 백슬래시 에러 방지를 위해 r"" (raw string) 사용
-        self.base_path = Path(r"C:\TheCareer\NextEnterAI\app\data")
+        # 1. 데이터 파일이 위치한 경로 설정 (프로젝트 루트 기준 상대 경로)
+        # 하드코딩된 절대 경로 대신 현재 프로젝트 구조를 기준으로 경로 계산
+        self.base_path = get_data_path()
         
         # 2. 파일명 정의 (실제 폴더의 파일명과 대소문자까지 일치해야 합니다)
         self.file_names = {
@@ -30,12 +46,22 @@ class DataLoader:
         """
         지정된 경로에서 JSON 파일들을 읽어오고 로드 결과를 출력합니다.
         """
+        # 경로 디버깅 정보 출력
+        project_root = get_project_root()
+        print(f"📁 [경로 정보] 프로젝트 루트: {project_root}")
+        print(f"📁 [경로 정보] 데이터 디렉토리: {self.base_path}")
+        
         # 경로 존재 여부 확인
         if not self.base_path.exists():
             print(f"❌ [경로 에러] 폴더를 찾을 수 없습니다: {self.base_path}")
             # 폴더가 없으면 현재 실행 위치(CWD)에서 찾는 것으로 우회
-            self.base_path = Path.cwd()
-            print(f"ℹ️ [우회] 현재 작업 디렉토리에서 파일을 찾습니다: {self.base_path}")
+            fallback_path = Path.cwd() / "app" / "data"
+            if fallback_path.exists():
+                self.base_path = fallback_path
+                print(f"ℹ️ [우회] 현재 작업 디렉토리 기준으로 경로 변경: {self.base_path}")
+            else:
+                self.base_path = Path.cwd()
+                print(f"⚠️ [경고] 데이터 디렉토리를 찾을 수 없어 현재 작업 디렉토리 사용: {self.base_path}")
 
         for key, filename in self.file_names.items():
             path = self.base_path / filename
