@@ -26,5 +26,8 @@
   "python.analysis.diagnosticMode": "workspace",
   "basedpyright.analysis.typeCheckingMode": "basic",
   "basedpyright.analysis.diagnosticMode": "workspace",
-  "basedpyright.analysis.reportMissingImports": "none"
+  "basedpyright.analysis.reportMissingImports": "none",
+  "cursorpyright.analysis.autoImportCompletions": true,
+  "cursorpyright.analysis.diagnosticMode": "workspace",
+  "cursorpyright.analysis.typeCheckingMode": "basic"
 }
