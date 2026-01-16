@@ -4,7 +4,7 @@ import httpx
 import os
 from typing import Dict, Any
 from dotenv import load_dotenv
-from app.dto import ResumeAnalysisResponse
+from app.schemas.resume import ResumeAnalysisResponse
 
 # .env 파일 로드
 load_dotenv()
@@ -67,7 +67,7 @@ class AIAnalyzer:
         당신은 전문 리크루팅 AI입니다. 반드시 JSON 형식으로만 응답하며, 다음 구조를 지키세요:
         {
             "classification": {
-                "predicted_role": "backend | frontend | pm | fullstack | da 중 선택",
+                "predicted_role": "backend | frontend | pm | fullstack | ui/ux designer | ai/llm engineer 중 선택",
                 "keywords": ["기술스택1", "기술스택2", ...]
             },
             "evaluation": {
@@ -76,10 +76,18 @@ class AIAnalyzer:
                 "summary": "전체 요약문",
                 "pros": ["강점1", "강점2"],
                 "cons": ["보완점1", "보완점2"],
-                "reasoning": "점수 산출 근거 (ATS 공식 $S_{matched} / S_{required}$ 언급 포함)",
-                "recommended_companies": ["기업명1", "기업명2"]
+                "reasoning": "점수 산출 근거 (가중치: 경력 40%, 프로젝트 30%, 기술 20%, 학력 10% 반영)",
+                "recommended_companies": ["기업명1", "기업명2", "기업명3"]
             }
         }
+        
+        [등급 산정 지침]
+        1. 가중치 배분: 경력(40%), 프로젝트(30%), 기술(20%), 학력(10%)을 종합하여 점수를 산출하세요.
+        2. 유연한 평가: 기술 스택이 일부 부족하더라도 학력(전공)과 관련 경력이 양호하면 절대 F를 주지 마세요.
+        3. F등급 조건: '직무가 완전히 다르거나', '경력이 아예 무관한' 경우에만 제한적으로 부여하세요.
+        4. 비전공자 우대: 비전공자라도 프로젝트 경험이 풍부하고 기술력이 증명되면 B등급 이상을 고려하세요.
+        5. ATS 점수: Reasoning에 실제 매칭된 기술 스택 비율($S_{matched} / S_{required}$)을 언급하며 논리적으로 설명하세요.
+
         등급 기준: S(90+), A(80+), B(70+), C(60+), F(60미만)
         """
         

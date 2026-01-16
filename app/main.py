@@ -30,7 +30,7 @@ def test_matching_with_json(limit=3):
     data 폴더의 final_resume_600.json을 읽어서 
     매칭 엔진이 정상 동작하는지 테스트합니다.
     """
-    from app.services.matching_engine import MatchingEngine
+    from app.services.resume_engine import MatchingEngine
     
     print("\n[Test] Starting JSON matching test...")
     engine = MatchingEngine()

@@ -14,7 +14,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -32,7 +32,7 @@
         "target_roles": [
             "backend",
             "fullstack",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -50,7 +50,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -68,7 +68,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -85,7 +85,7 @@
         ],
         "target_roles": [
             "backend",
-            "PM",
+            "pm",
             "fullstack"
         ]
     },
@@ -104,7 +104,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -120,9 +120,9 @@
             "React"
         ],
         "target_roles": [
-            "AI/LLM",
+            "ai/llm engineer",
             "backend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -158,7 +158,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -176,7 +176,7 @@
         "target_roles": [
             "fullstack",
             "backend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -194,7 +194,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -211,7 +211,7 @@
         ],
         "target_roles": [
             "backend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -229,7 +229,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -246,7 +246,7 @@
         ],
         "target_roles": [
             "backend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -351,7 +351,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -369,7 +369,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -437,7 +437,7 @@
         ],
         "target_roles": [
             "backend",
-            "AI/LLM"
+            "ai/llm engineer"
         ]
     },
     {
@@ -490,7 +490,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -575,7 +575,7 @@
         ],
         "target_roles": [
             "backend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -593,7 +593,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -611,7 +611,7 @@
         "target_roles": [
             "fullstack",
             "frontend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -698,7 +698,7 @@
         ],
         "target_roles": [
             "backend",
-            "PM"
+            "pm"
         ]
     },
     {
@@ -733,7 +733,7 @@
         "target_roles": [
             "frontend",
             "fullstack",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -785,7 +785,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -820,7 +820,7 @@
         "target_roles": [
             "backend",
             "frontend",
-            "UI Design"
+            "ui/ux designer"
         ]
     },
     {
@@ -871,7 +871,7 @@
         ],
         "target_roles": [
             "fullstack",
-            "PM"
+            "pm"
         ]
     }
 ]
