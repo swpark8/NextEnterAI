@@ -140,15 +140,50 @@ class MatchingEngine:
     def _calculate_metadata_bonus(self, candidate_role: str, company_target_roles: List[str]) -> float:
         if not candidate_role or not company_target_roles: return 0.0
         cand_role_lower = candidate_role.lower()
+        
         for role in company_target_roles:
             role_lower = role.lower()
+            # 1. 완전 일치 또는 포함 관계
             if role_lower in cand_role_lower or cand_role_lower in role_lower:
                 return self.BONUS_ROLE_MATCH
-            if "fullstack" in cand_role_lower and role_lower in ["backend", "frontend"]:
+            
+            # 2. Fullstack 유연한 매칭 (FE/BE 모두 인정)
+            if "fullstack" in cand_role_lower and (role_lower in ["backend", "frontend"]):
                 return self.BONUS_ROLE_MATCH * 0.8
-            if "ai" in cand_role_lower and role_lower in ["nlp", "llm", "vision"]:
-                return self.BONUS_ROLE_MATCH
+            
+            # 3. AI/LLM Engineer 특화 매칭
+            if "ai" in cand_role_lower or "llm" in cand_role_lower:
+                if any(kw in role_lower for kw in ["nlp", "llm", "vision", "ai", "ml", "data"]):
+                    return self.BONUS_ROLE_MATCH
+            
+            # 4. UI/UX Designer 특화 매칭
+            if "ui/ux" in cand_role_lower or "designer" in cand_role_lower:
+                if any(kw in role_lower for kw in ["design", "ui", "ux", "product", "creative"]):
+                    return self.BONUS_ROLE_MATCH
+                    
         return 0.0
+
+    def _check_role_relevance(self, target_category: str, current_role: str) -> bool:
+        """
+        [Team Rule] 지원 직무와 이전 경력 직무 간의 유사성 판단
+        """
+        if not target_category or not current_role: return False
+        target_category = target_category.lower()
+        current_role = current_role.lower()
+        
+        # 기본 키워드 정의
+        relevance_keywords = [target_category, '기획', '개발', 'developer', 'manager', 'engineer', 'design']
+        
+        # 신규 직무별 확장 키워드
+        if "designer" in target_category or "ui/ux" in target_category:
+            relevance_keywords.extend(['art', 'creative', 'ux', 'ui', '디자인', '디자이너', '퍼블리셔'])
+        
+        if "ai" in target_category or "llm" in target_category:
+            relevance_keywords.extend(['researcher', 'scientist', 'nlp', 'ml', 'data', 'lab', '연구원'])
+        
+        if any(kw in current_role for kw in relevance_keywords):
+            return True
+        return False
 
     def _normalize_vector_score(self, val: float) -> float:
         """
@@ -160,6 +195,58 @@ class MatchingEngine:
 
         normalized = (val - min_bound) / (max_bound - min_bound)
         return max(0.0, min(1.0, normalized))
+
+    def get_grade(self, score: float) -> str:
+        """점수 기반 등급 판정"""
+        if score >= 90: return "S"
+        if score >= 80: return "A"
+        if score >= 70: return "B"
+        if score >= 60: return "C"
+        return "F"
+
+    def verify_and_regrade(self, resume_input: dict, final_raw_score: float) -> float:
+        """
+        [Ghost F 해결] 텍스트 매칭은 준수하나 점수가 낮게 나온 경우 보정
+        경력(40%), 프로젝트(30%), 기술(20%), 학력(10%) 가중치 기반 정밀 재채점
+        """
+        content = resume_input.get('resume_content', {})
+        
+        # 1. 학력 점수 (10%)
+        edu_score = 0.0
+        for edu in content.get('education', []):
+            major = edu.get('major', '').lower()
+            if any(kw in major for kw in ['컴퓨터', 'computer', '소프트웨어', 'software', 'IT', '전산']):
+                edu_score = 0.1
+                break
+        
+        # 2. 경력 점수 (40%)
+        exp_score = 0.0
+        experiences = content.get('professional_experience', [])
+        if experiences:
+            exp_score = 0.2 # 기본 경력 보유
+            for exp in experiences:
+                period = str(exp.get('period', ''))
+                # 3년 이상 경력 시 가중치 최대
+                if any(kw in period for kw in ['36개월', '3년', '48개월', '4년', '5년', '60개월']):
+                    exp_score = 0.4
+                    break
+        
+        # 3. 프로젝트 점수 (30%)
+        proj_score = 0.0
+        if content.get('project_experience', []):
+            proj_score = 0.3
+
+        # 4. 기술 점수 (기존 final_raw_score 활용 - 20%)
+        tech_score = final_raw_score * 0.2
+
+        # 최종 보정 점수
+        refined_score = tech_score + exp_score + proj_score + edu_score
+        
+        # [Ghost F 방어] 학력과 경력이 양호하면 최소 C등급(0.6) 하한선 보장
+        if (edu_score >= 0.1 or exp_score >= 0.3) and refined_score < 0.6:
+            refined_score = 0.6
+            
+        return min(1.0, refined_score)
 
     def _map_score_to_range(self, raw_score: float, target_min: float, target_max: float) -> float:
         """
@@ -173,8 +260,25 @@ class MatchingEngine:
         scaled_score = target_min + (normalized * (target_max - target_min))
         return round(scaled_score, 1)
 
-    def _categorize_companies(self, all_companies, vector_scores, resume_text, candidate_role):
+    def _categorize_companies(self, all_companies, vector_scores, resume_input, candidate_role):
         buckets = {"Top": [], "Mid": [], "Low": []}
+        resume_text = self._convert_resume_to_text(resume_input)
+        
+        # 0. 이력서 기본 정보 추출 (F등급 판정용)
+        content = resume_input.get('resume_content', {})
+        experiences = content.get('professional_experience', [])
+        
+        # 경력 월수 추출
+        actual_months = 0
+        current_exp_role = ""
+        if experiences:
+            period_str = str(experiences[0].get('period', '0'))
+            current_exp_role = experiences[0].get('role', '')
+            nums = re.findall(r'\d+', period_str)
+            actual_months = int(nums[0]) if nums else 0
+            
+        # 직무 관련성 체크
+        is_relevant_role = self._check_role_relevance(candidate_role, current_exp_role)
 
         for idx, comp in enumerate(all_companies):
             # 1. 벡터 점수 정규화
@@ -193,8 +297,36 @@ class MatchingEngine:
             # 4. 메타데이터 보너스
             meta_bonus = self._calculate_metadata_bonus(candidate_role, comp.get('target_roles', []))
 
-            final_raw_score = hybrid_score + meta_bonus
-            final_raw_score = min(1.0, final_raw_score)
+            base_hybrid_score = hybrid_score + meta_bonus
+            
+            # [추가] 직무 불일치 감점 (Conflict Penalty)
+            # 메타데이터 보너스가 0인데 벡터 점수만 높은 경우, 실제 직무가 다를 확률이 높으므로 감점
+            if meta_bonus == 0 and v_norm > 0.4:
+                base_hybrid_score -= 0.15 # 약 15점 감점
+            
+            # 5. [Ghost F 해결] 정밀 재채점 (학력/경력 가중치 반영)
+            final_raw_score = self.verify_and_regrade(resume_input, base_hybrid_score)
+
+            # 6. [Team Rule] F등급 강제 판정 로직 (무경력/무관직무/기술매칭0)
+            is_forced_f = False
+            f_reason = ""
+            if actual_months == 0:
+                is_forced_f = True
+                f_reason = "무경력자(신입)"
+            elif not is_relevant_role:
+                is_forced_f = True
+                f_reason = "직무 불일치"
+            elif k_score == 0 and v_norm < 0.3: # 기술 매칭이 매우 낮은 경우
+                is_forced_f = True
+                f_reason = "기술 역량 부족"
+
+            if is_forced_f:
+                # F등급 점수 제한 (최대 59점)
+                final_raw_score = min(final_raw_score, 0.59)
+            else:
+                # C등급 이상 점수 보정 (최소 60점)
+                if final_raw_score < 0.60:
+                    final_raw_score = 0.60
 
             comp_data = {
                 "metadata": {
@@ -208,7 +340,9 @@ class MatchingEngine:
                 "vector_raw": round(v_raw, 2),
                 "vector_norm": round(v_norm, 2),
                 "keyword_raw": round(k_score, 2),
-                "meta_bonus": round(meta_bonus, 2)
+                "meta_bonus": round(meta_bonus, 2),
+                "is_forced_f": is_forced_f,
+                "f_reason": f_reason
             }
             # MatchResult 모델 호환성을 위해 flat 하게 저장하지 않고 metadata 구조 유지하되,
             # 내부 로직에서는 comp_data 접근
@@ -270,56 +404,88 @@ class MatchingEngine:
 
     def generate_xai_feedback(self, resume_input: dict, recommendations: List[Dict]) -> str:
         """
-        [기능 수정] 전체 추천 기업 목록을 기반으로
-        친근하고 구체적인 'AI 코치' 스타일의 종합 피드백 문장 생성
+        [기능 강화] 전문적이고 객관적인 AI 피드백 생성
+        - 등급별 톤 조절 (S/A/B: 긍정/전문, C/F: 냉철/분석)
+        - 직무 적합도 상세 분석 및 보강 제안 포함
         """
         feedback_lines = ["\n종합 AI 코치 의견:"]
 
         if not recommendations:
-            feedback_lines.append("제공된 이력서에 맞는 추천 기업을 찾지 못했습니다. 이력서 내용을 점검해주세요.")
+            feedback_lines.append("분석 결과, 현재 이력서에 부합하는 추천 기업을 식별할 수 없습니다. 이력서의 기술 스택 및 경력 기술을 재점검하여 주시기 바랍니다.")
             return "\n".join(feedback_lines)
 
-        # 1. 최고 매칭 기업 정보 분석
+        # 1. 기본 정보 추출
         top_rec = recommendations[0]
-        # comp_data 구조가 _categorize_companies에서 정의됨
-        # metadata 내부에 company_name이 있음
         top_company_name = top_rec['metadata']['company_name']
-        top_score = top_rec['match_score'] # recommend_companies에서 계산되어 추가됨
+        top_score = top_rec['match_score']
         top_note = top_rec.get('note', '')
-
-        # 이력서의 핵심 스킬 추출
+        
+        classification = resume_input.get('classification', {})
+        predicted_role = classification.get('predicted_role') or resume_input.get('target_role', '미지정 직무')
+        
         content = resume_input.get('resume_content', {})
-        skills = content.get('skills', {})
-        resume_essential_skills = set(skills.get('essential', []))
-        resume_additional_skills = set(skills.get('additional', []))
-        resume_all_skills = resume_essential_skills.union(resume_additional_skills)
+        resume_all_skills = set(content.get('skills', {}).get('essential', [])).union(set(content.get('skills', {}).get('additional', [])))
+        experiences = content.get('professional_experience', [])
+        projects = content.get('project_experience', [])
 
-        exp_tasks_summary = []
-        for exp in content.get('professional_experience', [])[:1]: # Top 1 experience
-            exp_tasks_summary.extend(exp.get('key_tasks', [])[:2]) # Top 2 tasks
-        exp_summary_str = ", ".join(exp_tasks_summary) if exp_tasks_summary else "다양한 프로젝트 경험"
+        # 2. [기업 매칭 결과] 섹션
+        feedback_lines.append(f"\n[기업 매칭 결과]")
+        feedback_lines.append(f"대상 기업: {top_company_name}")
+        feedback_lines.append(f"평가 등급: {top_note} ({top_score}점)")
+        
+        tone_summary = "긍정적" if top_score >= 76 else "분석적"
+        feedback_lines.append(f"분석 요약: 해당 이력서는 {predicted_role} 포지션에 대해 {tone_summary}인 정합성을 보이고 있습니다.")
 
-        # 2. 종합 평가 멘트
-        feedback_lines.append(f"이력서를 종합적으로 분석해 보니, 최고 매칭 기업인 **{top_company_name}**에서 {top_score}점으로 '{top_note}' 평가를 받았습니다.")
-
-        if top_score >= 88:
-            skills_str = ', '.join(list(resume_all_skills)[:3])
-            feedback_lines.append(f"지원자님의 **{skills_str}** 등의 핵심 역량과 **{exp_summary_str}** 경험이 해당 기업의 요구사항과 매우 잘 맞아 떨어집니다. 이 강점을 적극적으로 어필하면 좋은 결과가 있을 것입니다! 🚀")
-        elif top_score >= 76:
-            skills_str = ', '.join(list(resume_all_skills)[:2])
-            feedback_lines.append(f"전반적으로 안정적인 기술 핏을 보여주며, 특히 **{skills_str}** 역량은 충분합니다. 면접에서 **{exp_summary_str}** 경험과 성장 가능성을 효과적으로 전달한다면 합격권에 들 수 있습니다! 💪")
+        # 3. [직무 적합도 상세 분석] 섹션
+        feedback_lines.append(f"\n[직무 적합도 상세 분석]")
+        
+        # 기술 역량 분석
+        tech_match_pct = int(top_rec.get('keyword_raw', 0) * 100)
+        skills_list = list(resume_all_skills)
+        skills_str = ', '.join(skills_list[:3]) if skills_list else "기초 역량"
+        if tech_match_pct >= 80:
+            tech_fit_msg = f"{skills_str} 중심의 핵심 역량이 기업 요구사항과 매우 높은 일치도를 보입니다."
+        elif tech_match_pct >= 50:
+            tech_fit_msg = f"{skills_str} 등 주요 기술 스택을 보유하고 있으나, 실무 활용 역량에 대한 보완이 권장됩니다."
         else:
-            # 전체 추천 목록에서 'Skill Gap'이 있는 회사들을 찾아 부족한 스킬셋을 언급
-            all_missing_skills = set()
-            for rec in recommendations:
-                comp_stack = set(rec.get('tech_stack', []))
-                missing = comp_stack - resume_all_skills
-                if missing: all_missing_skills.update(list(missing)[:1])
-            
-            missing_str = ", ".join(list(all_missing_skills)[:3]) if all_missing_skills else "특정 기술 스택"
+            tech_fit_msg = "지원 직무에 필요한 핵심 기술 스택과 현재 보유하신 역량 간의 차이가 식별되었습니다."
+        feedback_lines.append(f"- 기술 역량: {tech_fit_msg}")
 
-            feedback_lines.append(f"아쉽게도 추천된 기업들, 특히 **{top_company_name}**에서는 **{missing_str}** 관련 역량에 대한 보완이 필요하다는 의견이 있었습니다.")
-            feedback_lines.append("이력서에서 언급된 부족 스킬에 대한 학습 계획이나 관련 프로젝트 경험을 강조하여 성장 가능성을 보여주는 것이 중요합니다. 포기하지 않고 꾸준히 발전하는 모습을 보여주세요! 🌟")
+        # 실무 경험 분석
+        exp_count = len(experiences)
+        if exp_count >= 1:
+            exp_role = experiences[0].get('role', '관련 직무')
+            exp_fit_msg = f"{exp_role} 경력을 통한 실무 기여 가능성이 높음으로 분석됩니다."
+        else:
+            exp_fit_msg = "실무 경력 증빙이 부족하여, 프로젝트 경험을 통한 역량 증명이 요구됩니다."
+        feedback_lines.append(f"- 실무 경험: {exp_fit_msg}")
+
+        # 직무 연관성 분석
+        relevance_pct = int(top_rec.get('vector_norm', 0) * 100)
+        feedback_lines.append(f"- 직무 연관성: 지원하신 직무와 보유하신 경력 간의 연관성은 {relevance_pct}% 수준입니다.")
+
+        # 4. [AI 보강 제안] 섹션
+        feedback_lines.append(f"\n[AI 보강 제안]")
+        
+        proposals = []
+        if top_score >= 76: # S/A/B
+            proj_title = projects[0].get('project_title', '주요 프로젝트') if projects else "수행 프로젝트"
+            proposals.append(f"1. 핵심 성과 수치화: {proj_title} 경험의 성과를 정량적 지표(KPI)로 명시하여 객관성을 확보하십시오.")
+            proposals.append(f"2. 직무 전문성 강조: 면접 시 {skills_str}를 활용한 문제 해결 사례를 구체적으로 어필하시기 바랍니다.")
+        else: # C/F
+            if not experiences:
+                proposals.append("1. 직무 경력 보완: 지원 직무와 직접적으로 연관된 인턴십 또는 실무 프로젝트 경험을 확보하십시오.")
+            else:
+                proposals.append(f"1. 이력서 재구성: 현재의 {experiences[0].get('role', '이전 직무')} 중심 기술을 지원 직무인 {predicted_role} 관점으로 재해석하여 기술하십시오.")
+            
+            comp_stack = set(top_rec.get('tech_stack', []))
+            missing = list(comp_stack - resume_all_skills)[:2]
+            if missing:
+                proposals.append(f"2. 기술 스택 확충: 부족한 {', '.join(missing)} 관련 역량을 학습하고 이를 활용한 포트폴리오를 추가하십시오.")
+            else:
+                proposals.append("2. 프로젝트 상세화: 수행하신 프로젝트의 기술적 난이도와 본인의 기여도를 더 구체적으로 기술하십시오.")
+
+        feedback_lines.extend(proposals)
 
         return "\n".join(feedback_lines)
 
@@ -346,13 +512,31 @@ class MatchingEngine:
         vector_scores = cosine_similarity(query_vector, all_vectors)[0]
 
         # 4. 버킷팅 및 점수 계산
-        buckets = self._categorize_companies(self.company_data['companies'], vector_scores, resume_text, role)
+        buckets = self._categorize_companies(self.company_data['companies'], vector_scores, resume_input, role)
 
-        # 5. 등급 기반 기업 선정 (candidate_grade는 DTO에 없으므로 기본 B로 가정하거나 점수 기반 역산 가능하나, 여기선 B default)
-        # resume_input에 grade 정보가 있다면 사용
-        # resume_evaluation = resume_input.get('resume_evaluation', {})
-        # candidate_grade = resume_evaluation.get('grade', 'B') if resume_evaluation else 'B'
-        candidate_grade = "B" # 기본값
+        # 5. 등급 기반 기업 선정 (Smart Regrading 반영)
+        # resume_input에 이미 분석된 등급이 있다면 사용
+        resume_evaluation = resume_input.get('evaluation') or {}
+        candidate_grade = resume_evaluation.get('grade', 'B')
+        
+        # [Team Rule] 엔진이 판단한 강제 F 조건이 있는지 확인
+        all_comp_data = []
+        for t in buckets: all_comp_data.extend(buckets[t])
+        
+        is_candidate_forced_f = any(c.get('is_forced_f', False) for c in all_comp_data)
+        
+        if is_candidate_forced_f:
+            candidate_grade = "F"
+            print(f"   -> [Team Rule] Grade forced to F due to lack of experience or unrelated role.")
+        elif candidate_grade == "F":
+            # 분석 API에서는 F를 줬으나, 엔진 점수가 높게 나온 경우 (Ghost F 구제)
+            # 전체 기업 평균 점수를 기반으로 잠재 등급 확인
+            all_raw_scores = [c['raw_score'] for c in all_comp_data]
+            if all_raw_scores:
+                avg_score = sum(all_raw_scores) / len(all_raw_scores)
+                if avg_score > 0.6: # C등급 이상 점수가 충분히 나옴
+                    candidate_grade = "C"
+                    print(f"   -> [Ghost F Recovery] Grade F -> {candidate_grade} (Avg Score: {avg_score:.2f})")
 
         target_slots = self.TIER_RULES.get(candidate_grade, self.TIER_RULES["B"])
         final_selection = []
@@ -390,13 +574,16 @@ class MatchingEngine:
             else:
                 final_score = round(res['raw_score'] * 100, 1)
 
-            # Note 설정
+            # Note 설정 및 match_level 매핑
             if i == 0:
-                note = "🏆 Best Match"
+                note = "Best Match"
+                match_level = "BEST"
             elif res['raw_score'] < self.GAP_THRESHOLD:
-                note = "⚠️ Skill Gap"
+                note = "Skill Gap"
+                match_level = "GAP"
             else:
-                note = "✅ High Fit"
+                note = "High Fit"
+                match_level = "HIGH"
 
             # 내부 딕셔너리 업데이트 (feedback 생성용)
             res['match_score'] = final_score
@@ -411,15 +598,18 @@ class MatchingEngine:
                 "match_score": final_score,
                 "tier": res['metadata']['tier'],
                 "match_type": note,
+                "match_level": match_level,
                 "reason": f"Tech Match: {res['keyword_raw']*100:.0f}%, Vector: {res['vector_norm']:.2f}",
                 
                 # [Legacy Support] api/routes.py 호환
                 "raw_score": final_score, 
-                "is_exact_match": (note == "🏆 Best Match") or (final_score >= 85),
+                "is_exact_match": (note == "Best Match") or (final_score >= 85),
                 
                 # 내부 로직용 필드 유지 (feedback 용)
                 "tech_stack": res['tech_stack'],
-                "note": note
+                "note": note,
+                "keyword_raw": res['keyword_raw'],
+                "vector_norm": res['vector_norm']
             })
 
         # 7. 피드백 생성
@@ -428,4 +618,4 @@ class MatchingEngine:
         return formatted_results, report
 
 # Singleton Instance
-resume_validation_engine = MatchingEngine()
+resume_engine = MatchingEngine()

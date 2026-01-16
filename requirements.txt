@@ -8,3 +8,5 @@ numpy
 scikit-learn
 openai
 sentence-transformers
+python-dotenv
+httpx
