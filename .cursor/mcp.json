@@ -5,9 +5,9 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "c:\\TheCareer\\NextEnterAI",
-        "c:\\TheCareer\\NextEnterBack",
-        "c:\\TheCareer\\NextEnterFront"
+        "c:\\FuckingNextEnter\\NextEnterAI",
+        "c:\\FuckingNextEnter\\NextEnterBack",
+        "c:\\FuckingNextEnter\\NextEnterFront"
       ]
     }
   }
