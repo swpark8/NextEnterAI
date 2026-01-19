@@ -12,7 +12,7 @@ try:
     from sklearn.metrics.pairwise import cosine_similarity
     from openai import OpenAI
 except ImportError as e:
-    print(f"⚠️ 필수 라이브러리가 설치되지 않았습니다: {e}")
+    print(f"[Warning] Required library not installed: {e}")
     # 실제 환경에서는 로그를 남기거나 에러를 raise 할 수 있음
 
 # ==========================================
@@ -89,7 +89,7 @@ class MatchingEngine:
     GAP_THRESHOLD = 0.50  # 0.5점(50점) 미만이면 경고
 
     def __init__(self):
-        print("🚀 매칭 엔진(Matching Engine) 초기화 중...")
+        print("[Start] Matching Engine initializing...")
         
         self.base_path = get_data_path()
         self.model_name = "jhgan/ko-sroberta-multitask"
@@ -115,7 +115,7 @@ class MatchingEngine:
         pkl_path = self.base_path / "company_jd_vectors.pkl"
         
         if not pkl_path.exists():
-            print(f"❌ 기업 벡터 파일을 찾을 수 없습니다: {pkl_path}")
+            print(f"[Error] Company vector file not found: {pkl_path}")
             return None
             
         try:
@@ -125,10 +125,10 @@ class MatchingEngine:
                 print(f"   -> 기업 데이터 로드 완료: {len(data['companies'])}개 기업")
                 return data
             else:
-                print("❌ pkl 파일 구조 오류")
+                print("[Error] pkl file structure error")
                 return None
         except Exception as e:
-            print(f"❌ 데이터 로딩 오류: {e}")
+            print(f"[Error] Data loading error: {e}")
             return None
 
     def _calculate_keyword_score(self, resume_text: str, tech_stack: List[str]) -> float:
