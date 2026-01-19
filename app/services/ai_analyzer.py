@@ -17,14 +17,14 @@ class AIAnalyzer:
         self.model_name = "gpt-4o-mini"
         
         if not self.api_key:
-            print("⚠️ [Warning] .env 파일에 OPENAI_API_KEY가 설정되지 않았습니다.")
+            print("[Warning] OPENAI_API_KEY is not set in .env file.")
         else:
             print(f"[AI Analyzer] Initialized with {self.model_name} Engine (API Key Loaded)")
 
     async def _call_openai_with_retry(self, system_prompt: str, user_prompt: str, retries: int = 5):
         """에러 500/422 및 API 전송 실패 시 지수 백오프 재시도 로직"""
         if not self.api_key:
-            print("❌ [Error] API Key가 없습니다. 요청을 보낼 수 없습니다.")
+            print("[Error] API Key is missing. Cannot send request.")
             return None
 
         delay = 1
@@ -51,9 +51,9 @@ class AIAnalyzer:
                     if response.status_code == 200:
                         return response.json()
                     
-                    print(f"⚠️ OpenAI API Error {response.status_code}: {response.text}")
+                    print(f"[Warning] OpenAI API Error {response.status_code}: {response.text}")
             except Exception as e:
-                print(f"⚠️ Connection Error: {e}")
+                print(f"[Warning] Connection Error: {e}")
             
             await asyncio.sleep(delay)
             delay *= 2
@@ -106,7 +106,7 @@ class AIAnalyzer:
             return ResumeAnalysisResponse(**cleaned_data)
             
         except Exception as e:
-            print(f"❌ JSON Parsing Error: {e}")
+            print(f"[Error] JSON Parsing Error: {e}")
             return self._get_fallback()
 
     def _recover_data(self, data: Dict[str, Any]) -> Dict[str, Any]:

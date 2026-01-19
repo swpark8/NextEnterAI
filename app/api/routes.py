@@ -54,7 +54,7 @@ async def recommend_jobs(resume: ResumeInputDTO):
         return {"companies": formatted_companies, "ai_report": report}
         
     except Exception as e:
-        print(f"❌ [추천 API 에러] : {e}")
+        print(f"[Error] Recommendation API error: {e}")
         raise HTTPException(status_code=500, detail="기업 매칭 중 오류가 발생했습니다.")
 
 
@@ -77,5 +77,5 @@ async def extract_text(file: UploadFile = File(...)):
         }
         
     except Exception as e:
-        print(f"❌ [텍스트 추출 에러] : {e}")
+        print(f"[Error] Text extraction error: {e}")
         raise HTTPException(status_code=500, detail="파일 처리 중 오류가 발생했습니다.")
