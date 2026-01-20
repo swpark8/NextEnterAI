@@ -119,9 +119,60 @@ class MatchingEngine:
         self.dl = DataLoader()
 
     def _load_company_vectors(self):
-        """pkl 파일 로드"""
+        """pkl 파일 로드 또는 JSON에서 직접 로드 (개발 모드)"""
         pkl_path = self.base_path / "company_jd_vectors.pkl"
+        json_path = self.base_path / "company_50_pool.json"
         
+        # 개발 모드: 환경 변수로 제어
+        use_json = os.getenv("USE_JSON_COMPANIES", "false").lower() == "true"
+        
+        # JSON 직접 로드 (개발 모드)
+        if use_json:
+            if json_path.exists():
+                print(f"   -> [개발 모드] JSON에서 기업 데이터 직접 로드: {json_path}")
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        companies = json.load(f)
+                    
+                    print(f"   -> 기업 데이터 로드 완료: {len(companies)}개 기업")
+                    
+                    # 벡터 생성
+                    print(f"   -> 벡터 생성 중...")
+                    texts = []
+                    for company in companies:
+                        # 기업 정보를 텍스트로 변환
+                        parts = []
+                        if company.get('name'):
+                            parts.append(company['name'])
+                        if company.get('industry'):
+                            parts.append(company['industry'])
+                        if company.get('tech_stack'):
+                            parts.append(" ".join(company['tech_stack']))
+                        if company.get('target_roles'):
+                            parts.append(" ".join(company['target_roles']))
+                        if company.get('location'):
+                            parts.append(company['location'])
+                        texts.append(" ".join(parts))
+                    
+                    # 모델로 벡터 생성 (self.model은 이미 __init__에서 로드됨)
+                    vectors = self.model.encode(texts, show_progress_bar=False, batch_size=32)
+                    
+                    print(f"   -> 벡터 생성 완료: {vectors.shape}")
+                    
+                    return {
+                        'companies': companies,
+                        'vectors': vectors
+                    }
+                except Exception as e:
+                    print(f"[Error] JSON 로드 중 오류: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+            else:
+                print(f"[Error] JSON 파일을 찾을 수 없습니다: {json_path}")
+                return None
+        
+        # 프로덕션 모드: pickle 파일 로드
         if not pkl_path.exists():
             print(f"[Error] Company vector file not found: {pkl_path}")
             return None
@@ -130,7 +181,7 @@ class MatchingEngine:
             with open(pkl_path, 'rb') as f:
                 data = pickle.load(f)
             if isinstance(data, dict) and 'vectors' in data:
-                print(f"   -> 기업 데이터 로드 완료: {len(data['companies'])}개 기업")
+                print(f"   -> 기업 데이터 로드 완료: {len(data['companies'])}개 기업 (pkl 파일)")
                 return data
             else:
                 print("[Error] pkl file structure error")
@@ -144,6 +195,46 @@ class MatchingEngine:
         resume_lower = resume_text.lower()
         match_count = sum(1 for t in tech_stack if t.lower() in resume_lower)
         return match_count / len(tech_stack)
+
+    def _calculate_missing_skills(self, resume_input: dict, company_tech_stack: List[str]) -> List[str]:
+        """
+        사용자가 보유하지 않은 기업 요구 스킬을 계산합니다.
+        대소문자 무시하고, 부분 문자열 매칭도 고려합니다.
+        """
+        if not company_tech_stack:
+            return []
+        
+        # 사용자 스킬 추출
+        content = resume_input.get('resume_content', {})
+        skills = content.get('skills', {})
+        user_skills = skills.get('essential', []) + skills.get('additional', [])
+        
+        # 사용자 스킬을 소문자로 정규화 (비교용)
+        user_skills_normalized = [skill.lower().strip() for skill in user_skills if skill]
+        
+        missing = []
+        for required_skill in company_tech_stack:
+            if not required_skill:
+                continue
+                
+            required_normalized = required_skill.lower().strip()
+            
+            # 정확히 일치하는지 확인
+            if required_normalized in user_skills_normalized:
+                continue
+            
+            # 부분 문자열 매칭 확인 (예: "React"와 "React.js", "React Native")
+            is_matched = False
+            for user_skill in user_skills_normalized:
+                # 사용자 스킬이 요구 스킬을 포함하거나, 요구 스킬이 사용자 스킬을 포함하는 경우
+                if required_normalized in user_skill or user_skill in required_normalized:
+                    is_matched = True
+                    break
+            
+            if not is_matched:
+                missing.append(required_skill)
+        
+        return missing
 
     def _calculate_metadata_bonus(self, candidate_role: str, company_target_roles: List[str]) -> float:
         if not candidate_role or not company_target_roles: return 0.0
@@ -336,6 +427,9 @@ class MatchingEngine:
                 if final_raw_score < 0.60:
                     final_raw_score = 0.60
 
+            # 7. 부족한 스킬 계산 (사용자가 보유하지 않은 기업 요구 스킬)
+            missing_skills = self._calculate_missing_skills(resume_input, comp.get('tech_stack', []))
+
             comp_data = {
                 "metadata": {
                     "company_name": comp["name"],
@@ -523,19 +617,37 @@ class MatchingEngine:
         buckets = self._categorize_companies(self.company_data['companies'], vector_scores, resume_input, role)
 
         # 5. 등급 기반 기업 선정 (Smart Regrading 반영)
-        # resume_input에 이미 분석된 등급이 있다면 사용
-        resume_evaluation = resume_input.get('evaluation') or {}
-        candidate_grade = resume_evaluation.get('grade', 'B')
-        
-        # [Team Rule] 엔진이 판단한 강제 F 조건이 있는지 확인
+        # 모든 기업 점수 데이터 수집
         all_comp_data = []
         for t in buckets: all_comp_data.extend(buckets[t])
         
+        # [Team Rule] 엔진이 판단한 강제 F 조건이 있는지 확인
         is_candidate_forced_f = any(c.get('is_forced_f', False) for c in all_comp_data)
         
+        # candidate_grade 자동 계산
+        resume_evaluation = resume_input.get('evaluation') or {}
+        candidate_grade = resume_evaluation.get('grade')
+        
         if is_candidate_forced_f:
+            # 강제 F 조건: 무경력자 또는 직무 불일치
             candidate_grade = "F"
             print(f"   -> [Team Rule] Grade forced to F due to lack of experience or unrelated role.")
+        elif candidate_grade is None:
+            # evaluation 필드가 없으면 점수 기반으로 자동 계산
+            if all_comp_data:
+                # 상위 3개 기업의 평균 점수 사용 (더 정확한 등급 판단)
+                sorted_companies = sorted(all_comp_data, key=lambda x: x['raw_score'], reverse=True)
+                top_scores = [c['raw_score'] for c in sorted_companies[:3]]
+                avg_score = sum(top_scores) / len(top_scores) if top_scores else 0.0
+                
+                # raw_score는 0.0~1.0 범위이므로 0~100으로 변환하여 등급 판정
+                score_100 = avg_score * 100
+                candidate_grade = self.get_grade(score_100)
+                print(f"   -> [Auto Grade] Calculated grade: {candidate_grade} (Avg Top-3 Score: {score_100:.1f}/100)")
+            else:
+                # 기업 데이터가 없으면 기본값 B
+                candidate_grade = "B"
+                print(f"   -> [Auto Grade] No company data, defaulting to B")
         elif candidate_grade == "F":
             # 분석 API에서는 F를 줬으나, 엔진 점수가 높게 나온 경우 (Ghost F 구제)
             # 전체 기업 평균 점수를 기반으로 잠재 등급 확인
@@ -615,6 +727,7 @@ class MatchingEngine:
                 
                 # 내부 로직용 필드 유지 (feedback 용)
                 "tech_stack": res['tech_stack'],
+                "missing_skills": res.get('missing_skills', []), # 부족한 스킬 목록
                 "note": note,
                 "keyword_raw": res['keyword_raw'],
                 "vector_norm": res['vector_norm']

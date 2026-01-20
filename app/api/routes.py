@@ -48,7 +48,8 @@ async def recommend_jobs(resume: ResumeInputDTO):
                 "role": item['metadata'].get('job_title', 'Unknown'),
                 "score": round(item.get('raw_score', 0.0), 1),
                 "match_level": item.get('match_level', 'HIGH'),
-                "is_exact_match": item.get('is_exact_match', False)
+                "is_exact_match": item.get('is_exact_match', False),
+                "missing_skills": item.get('missing_skills', [])
             })
             
         return {"companies": formatted_companies, "ai_report": report}

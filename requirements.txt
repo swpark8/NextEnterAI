@@ -10,4 +10,4 @@ openai
 sentence-transformers
 python-dotenv
 httpx
-'uvicorn[standard]'
+
