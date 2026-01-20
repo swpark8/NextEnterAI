@@ -5,6 +5,10 @@ import pickle
 import numpy as np
 from typing import List, Dict, Optional
 from pathlib import Path
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # 필수 라이브러리 로드
 try:
@@ -95,7 +99,11 @@ class MatchingEngine:
         self.model_name = "jhgan/ko-sroberta-multitask"
         
         # OpenAI Client (환경변수에서 키 로드)
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            print("[Warning] OPENAI_API_KEY is not set in .env file.")
+        else:
+            print(f"[Matching Engine] OpenAI API Key loaded successfully")
         self.client = OpenAI(api_key=api_key) if api_key else None
 
         # Model Load

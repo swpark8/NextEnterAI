@@ -1,14 +1,22 @@
-{
+﻿{
   "mcpServers": {
     "filesystem": {
       "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "c:\\FuckingNextEnter\\NextEnterAI",
-        "c:\\FuckingNextEnter\\NextEnterBack",
-        "c:\\FuckingNextEnter\\NextEnterFront"
+        "C:\\TheCareer\\NextEnterAI"
       ]
+    },
+    "python": {
+      "command": "python",
+      "args": [
+        "-m",
+        "mcp_server_python"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\TheCareer\\NextEnterAI"
+      }
     }
   }
 }
