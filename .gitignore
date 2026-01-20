@@ -126,3 +126,7 @@ dmypy.json
 
 # MCP configuration
 mcp.json
+
+# 커서 관련 파일
+.cursorignore
+.cursor/
