@@ -43,10 +43,18 @@ async def recommend_jobs(resume: ResumeInputDTO):
         # 프론트엔드용 데이터 변환
         formatted_companies = []
         for item in companies:
+            # match_score가 있으면 사용, 없으면 raw_score를 100배하여 변환 (0.0~1.0 -> 0~100)
+            match_score = item.get('match_score')
+            if match_score is None:
+                raw_score = item.get('raw_score', 0.0)
+                match_score = round(raw_score * 100, 1)
+            else:
+                match_score = round(match_score, 1)
+            
             formatted_companies.append({
                 "company_name": item['metadata'].get('company_name', 'Unknown'),
                 "role": item['metadata'].get('job_title', 'Unknown'),
-                "score": round(item.get('raw_score', 0.0), 1),
+                "score": match_score,
                 "match_level": item.get('match_level', 'HIGH'),
                 "is_exact_match": item.get('is_exact_match', False),
                 "missing_skills": item.get('missing_skills', [])
