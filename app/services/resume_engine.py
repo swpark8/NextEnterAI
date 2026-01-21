@@ -7,6 +7,14 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Any, Optional
 from dotenv import load_dotenv
 
+# [핵심] .env 파일 로드를 위한 라이브러리
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("⚠️ 'python-dotenv' 라이브러리가 없습니다. 'pip install python-dotenv'를 실행해주세요.")
+    # 더미 함수 정의 (에러 방지)
+    def load_dotenv(dotenv_path=None): pass
+
 # 필수 라이브러리 로드 체크
 try:
     from sentence_transformers import SentenceTransformer
@@ -14,30 +22,46 @@ try:
     from openai import OpenAI
 except ImportError:
     print("⚠️ 필수 라이브러리가 설치되지 않았습니다. requirements.txt를 확인하세요.")
+    
+# ==========================================
+# 0. 환경 변수(.env) 로드 및 진단
+# ==========================================
+print("\n[System] Loading environment variables...")
+env_path = Path.cwd() / ".env" # 현재 위치에서 .env 찾기
 
-# 환경 변수 로드
-load_dotenv()
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"✅ Found .env file at: {env_path}")
+else:
+    load_dotenv() # 기본 경로 탐색
+    print("ℹ️ No explicit .env file found in root. Searching default locations...")
+
+
 
 # ==========================================
 # 1. 유틸리티 및 경로 설정 (Infrastructure)
 # ==========================================
 def get_data_path() -> Path:
-    """
-    데이터 폴더 경로를 안전하게 찾습니다. (배포/로컬 호환)
-    """
     cwd = Path.cwd()
-    # 1. 현재 실행 위치 기준
-    if (cwd / "app" / "data").exists(): return cwd / "app" / "data"
-    # 2. 파일 위치 기준
-    if (Path(__file__).parent / "app" / "data").exists(): return Path(__file__).parent / "app" / "data"
-    # 3. 상위 탐색
-    current = Path(__file__).resolve()
-    for _ in range(3):
-        current = current.parent
-        if (current / "app" / "data").exists(): return current / "app" / "data"
+    # 다양한 경로 시도
+    candidates = [
+        cwd / "app" / "data",
+        Path(__file__).parent / "app" / "data",
+        Path(__file__).parent.parent / "app" / "data", # 상위 폴더 고려
+        cwd / "services" / "data", # services 폴더 구조 대응
+        cwd / "data"
+    ]
     
-    print(f"⚠️ [Critical] 'app/data' 폴더를 찾을 수 없습니다. 현재 위치: {cwd}")
-    return cwd / "app" / "data"
+    for path in candidates:
+        if path.exists():
+            return path
+            
+    # 못 찾으면 생성 시도 (에러 방지)
+    try:
+        (cwd / "data").mkdir(exist_ok=True)
+        return cwd / "data"
+    except:
+        return cwd / "app" / "data"
 
 class DataLoader:
     def __init__(self):

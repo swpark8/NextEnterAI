@@ -1,7 +1,10 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException
+import json
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ValidationError
 from typing import List, Dict, Any, Optional
 
 # [핵심] 우리가 만든 엔진 임포트
@@ -14,13 +17,13 @@ from services.resume_engine import MatchingEngine
 app = FastAPI(
     title="NextEnter AI Resume Analysis Server",
     description="이력서 평가 및 기업 추천 AI 엔진 API",
-    version="2.1.0"
+    version="2.2.0 (Hybrid Mode)"
 )
 
 # CORS 설정 (React 프론트엔드 연동용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 보안을 위해 배포 시에는 구체적 도메인 권장
+    allow_origins=["*"],  # 모든 도메인 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,36 +33,40 @@ app.add_middleware(
 # 2. 엔진 초기화 (서버 시작 시 1회 로드)
 # ==========================================
 print("🚀 Server initializing...")
-engine = MatchingEngine()
-print("✅ Server ready to accept requests.")
+try:
+    engine = MatchingEngine()
+    print("✅ Server ready to accept requests.")
+except Exception as e:
+    print(f"⚠️ Engine Load Error: {e}")
+    engine = None
 
 # ==========================================
-# 3. 데이터 모델 정의 (Pydantic) - Schema 통합 완료
+# 3. 데이터 모델 정의 (유연한 구조 적용)
 # ==========================================
 
-# (1) 요청 데이터 (React -> Python)
-# resume.py의 모든 필드를 수용하도록 설계됨
+# (1) 요청 데이터 - [수정됨] 아주 관대한 모델 (Hybrid Request)
+# 프론트엔드가 어떤 형식으로 보내든 일단 받아서 처리합니다.
 class ResumeRequest(BaseModel):
-    # 필수 필드
     id: Optional[str] = "USER_TEMP"
-    target_role: str = Field(..., description="희망 직무 (backend, frontend, pm 등)")
     
-    # [복구] resume.py에 있던 선택 필드들 완벽 이식
-    candidate_id: Optional[str] = None
-    standardized_role: Optional[Dict[str, Any]] = None
+    # 1. 필수였던 필드들을 Optional로 변경 (422 에러 방지)
+    target_role: Optional[str] = Field(None, description="희망 직무")
     
-    # [핵심 전략] 하위 객체(Education, Skills 등)를 Dict로 통합하여 422 에러 원천 차단
-    # 기존 ResumeContent 클래스 내용을 이 Dict 안에 모두 담습니다.
-    resume_content: Dict[str, Any] = Field(..., description="이력서 상세 (학력, 스킬, 경력 포함)")
+    # 2. 신규 구조 (Nested)
+    resume_content: Optional[Dict[str, Any]] = None
     
-    # 추가 메타데이터
-    classification: Optional[Dict[str, Any]] = None
-    evaluation: Optional[Dict[str, Any]] = None
+    # 3. 구형 구조 (Flat) - 낱개로 들어올 경우를 대비
+    education: Optional[List[Any]] = None
+    skills: Optional[Any] = None # Dict or List
+    professional_experience: Optional[List[Any]] = None
+    project_experience: Optional[List[Any]] = None
+    
+    # 그 외 어떤 필드가 들어와도 에러내지 않음
+    class Config:
+        extra = "ignore" 
 
-# (2) 응답 데이터 - 추천 기업 상세 정보
-# resume_engine_fixed.py가 뱉는 결과물과 1:1 매칭
+# (2) 응답 데이터 구조 (변경 없음)
 class CompanyRecommendation(BaseModel):
-    # 기본 정보
     company_name: str
     match_score: float
     tier: str
@@ -68,68 +75,135 @@ class CompanyRecommendation(BaseModel):
     reason: str
     tech_stack: List[str]
     missing_skills: List[str]
-    
-    # 상세 점수 (피드백 생성용)
     keyword_raw: float
     vector_norm: float
     ats_score: Optional[Dict[str, Any]] = None
-    
-    # [Legacy 호환] 기존 프론트엔드 코드 깨짐 방지
     raw_score: float
     is_exact_match: bool
-    
-    # 메타데이터 (UI 표시용)
     metadata: Optional[Dict[str, Any]] = None
 
-# (3) 최종 API 응답 구조
 class AnalysisResponse(BaseModel):
     status: str = "success"
     resume_id: str
     target_role: str
-    
-    # 분석 결과
     grade: str
     score: float
-    ai_feedback: str  # XAI 리포트
-    
-    # 추천 리스트
+    ai_feedback: str
     recommendations: List[CompanyRecommendation]
 
 # ==========================================
-# 4. API 엔드포인트
+# 4. Exception Handler (Pydantic 검증 에러 상세 처리)
+# ==========================================
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Pydantic 검증 에러 발생 시 상세한 에러 메시지 반환
+    """
+    errors = exc.errors()
+    error_details = []
+    for error in errors:
+        error_details.append({
+            "field": " -> ".join(str(loc) for loc in error.get("loc", [])),
+            "message": error.get("msg"),
+            "type": error.get("type"),
+            "input": error.get("input")
+        })
+    
+    print(f"❌ [Validation Error] Request URL: {request.url}")
+    print(f"❌ [Validation Error] Request Method: {request.method}")
+    print(f"❌ [Validation Error] Errors: {json.dumps(error_details, indent=2, ensure_ascii=False)}")
+    
+    # 요청 본문 로깅 (가능한 경우)
+    # 주의: RequestValidationError 발생 시 본문이 이미 소비되었을 수 있음
+    try:
+        # Starlette의 Request는 body를 한 번만 읽을 수 있으므로,
+        # ValidationError 발생 시 이미 소비되었을 수 있음
+        body = await request.body()
+        if body:
+            print(f"❌ [Validation Error] Request Body: {body.decode('utf-8')}")
+        else:
+            print(f"⚠️ [Validation Error] Request body가 비어있거나 이미 소비되었습니다.")
+    except Exception as e:
+        # 본문이 이미 소비되었거나 읽을 수 없는 경우는 정상일 수 있음
+        print(f"⚠️ [Validation Error] Request body 읽기 실패 (이미 소비되었을 수 있음): {e}")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": error_details,
+            "message": "요청 데이터 검증 실패",
+            "errors": error_details
+        }
+    )
+
+# ==========================================
+# 5. API 엔드포인트
 # ==========================================
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
-async def analyze_resume(request: ResumeRequest):
+async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
     """
-    [Main API] 이력서를 받아 분석하고 추천 기업과 피드백을 반환합니다.
+    디버깅용: 실제 들어오는 body를 먼저 확인
     """
     try:
-        print(f"📥 [Request] Analyzing resume: {request.id} ({request.target_role})")
+        # 1. Raw body 확인
+        raw_body = await request.body()
+        print(f"🔍 [Raw Body] {raw_body.decode('utf-8')}")
         
-        # 1. 요청 데이터를 딕셔너리로 변환 (엔진 입력용)
-        # Pydantic 모델을 dict로 바꾸면 엔진이 쓰기 편함
-        resume_input = request.model_dump()
+        # 2. JSON 파싱
+        body_dict = await request.json()
+        print(f"🔍 [Parsed JSON] {json.dumps(body_dict, indent=2, ensure_ascii=False)}")
         
-        # 2. 엔진 실행
-        # recommend 함수는 (formatted_results, ai_report_string) 튜플을 반환함
-        results, report = engine.recommend(resume_input)
+        # 3. Pydantic 모델로 변환
+        resume_request = ResumeRequest(**body_dict)
+        print(f"🔍 [Pydantic Model] {resume_request}")
         
-        # 3. 데이터 검증 및 안전장치
+        # 4. 기존 로직 실행
+        request_obj = resume_request  # 이름 변경
+        
+        final_target_role = request_obj.target_role
+        if not final_target_role:
+            print("⚠️ 'target_role'이 비어있습니다. 기본값 'backend'로 설정합니다.")
+            final_target_role = "backend"
+
+        final_content = request_obj.resume_content
+        if not final_content:
+            print("⚠️ 'resume_content' (포장 상자)가 없습니다. 낱개 데이터를 조립합니다.")
+            final_content = {
+                "education": request_obj.education or [],
+                "skills": request_obj.skills or {},
+                "professional_experience": request_obj.professional_experience or [],
+                "project_experience": request_obj.project_experience or []
+            }
+        
+        resume_input = {
+            "id": request_obj.id,
+            "target_role": final_target_role,
+            "resume_content": final_content,
+            "classification": {},
+            "evaluation": {}
+        }
+        
+        print(f"🔍 Analyzing for role: {final_target_role}")
+
+        if engine:
+            results, report = engine.recommend(resume_input)
+        else:
+            raise Exception("Engine not initialized")
+        
         if not results:
             print("⚠️ No recommendations generated.")
             grade = "F"
             top_score = 0.0
         else:
-            # 1위 기업 점수 기반으로 등급 표시
             top_score = results[0]['match_score']
             grade = engine.get_grade(top_score)
 
-        # 4. 응답 생성
         response = {
             "status": "success",
-            "resume_id": request.id,
-            "target_role": request.target_role,
+            "resume_id": request_obj.id,
+            "target_role": final_target_role,
             "grade": grade,
             "score": top_score,
             "ai_feedback": report,
@@ -143,26 +217,20 @@ async def analyze_resume(request: ResumeRequest):
         import traceback
         traceback.print_exc()
         print(f"❌ [Error] {str(e)}")
-        # 422 Validation Error가 아닌 500 내부 에러로 명확히 반환
         raise HTTPException(status_code=500, detail=f"Server Logic Error: {str(e)}")
     
-# [추가됨] 사용자 안심용 Legacy Alias
+# [Legacy Alias]
 @app.post("/api/v1/recommend", response_model=AnalysisResponse, tags=["Legacy"])
-async def recommend_resume_alias(request: ResumeRequest):
+async def recommend_resume_alias(resume_request: ResumeRequest):
     """
-    [Alias] /api/v1/analyze 와 동일하게 동작합니다.
-    (기존 recommend API를 찾는 사용자를 위한 별칭)
+    /recommend 요청도 위와 똑같이 처리합니다.
     """
     print("🔄 Redirecting /recommend to /analyze...")
-    return await analyze_resume(request)
+    return await analyze_resume(resume_request)
 
 @app.get("/")
 async def health_check():
-    return {"status": "ok", "message": "NextEnter AI Server is running properly."}
+    return {"status": "ok", "message": "NextEnter AI Server is running properly (Hybrid Mode)."}
 
-# ==========================================
-# 5. 서버 실행 (직접 실행 시)
-# ==========================================
 if __name__ == "__main__":
-    # 포트 8000번에서 실행 (React는 보통 3000번)
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
