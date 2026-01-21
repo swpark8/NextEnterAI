@@ -1,77 +1,98 @@
 import json
-import re
+import numpy as np
 import os
 import pickle
-import numpy as np
-from typing import List, Dict, Optional
+import re
 from pathlib import Path
+from typing import List, Dict, Tuple, Any, Optional
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# [핵심] .env 파일 로드를 위한 라이브러리
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("⚠️ 'python-dotenv' 라이브러리가 없습니다. 'pip install python-dotenv'를 실행해주세요.")
+    # 더미 함수 정의 (에러 방지)
+    def load_dotenv(dotenv_path=None): pass
 
-# 필수 라이브러리 로드
+# 필수 라이브러리 로드 체크
 try:
     from sentence_transformers import SentenceTransformer
     from sklearn.metrics.pairwise import cosine_similarity
     from openai import OpenAI
-except ImportError as e:
-    print(f"[Warning] Required library not installed: {e}")
-    # 실제 환경에서는 로그를 남기거나 에러를 raise 할 수 있음
+except ImportError:
+    print("⚠️ 필수 라이브러리가 설치되지 않았습니다. requirements.txt를 확인하세요.")
+    
+# ==========================================
+# 0. 환경 변수(.env) 로드 및 진단
+# ==========================================
+print("\n[System] Loading environment variables...")
+env_path = Path.cwd() / ".env" # 현재 위치에서 .env 찾기
+
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"✅ Found .env file at: {env_path}")
+else:
+    load_dotenv() # 기본 경로 탐색
+    print("ℹ️ No explicit .env file found in root. Searching default locations...")
+
+
 
 # ==========================================
-# 1. 데이터 로드 및 경로 설정
+# 1. 유틸리티 및 경로 설정 (Infrastructure)
 # ==========================================
-def get_project_root() -> Path:
-    """
-    프로젝트 루트 디렉토리를 반환합니다.
-    app/services/resume_validation_engine.py -> 프로젝트 루트
-    """
-    current_file = Path(__file__).resolve()
-    return current_file.parent.parent.parent
-
 def get_data_path() -> Path:
-    """
-    데이터 디렉토리 경로를 반환합니다.
-    """
-    return get_project_root() / "app" / "data"
+    cwd = Path.cwd()
+    # 다양한 경로 시도
+    candidates = [
+        cwd / "app" / "data",
+        Path(__file__).parent / "app" / "data",
+        Path(__file__).parent.parent / "app" / "data", # 상위 폴더 고려
+        cwd / "services" / "data", # services 폴더 구조 대응
+        cwd / "data"
+    ]
+    
+    for path in candidates:
+        if path.exists():
+            return path
+            
+    # 못 찾으면 생성 시도 (에러 방지)
+    try:
+        (cwd / "data").mkdir(exist_ok=True)
+        return cwd / "data"
+    except:
+        return cwd / "app" / "data"
 
 class DataLoader:
-    """
-    기존 데이터 로더 유지 (필요 시 다른 메타데이터 접근용)
-    """
     def __init__(self):
         self.base_path = get_data_path()
         self.file_names = {
             "resumes": "final_resume_600.json",
             "companies": "company_50_pool.json",
-            "metadata": "final_metadata_600.json"
+            "metadata": "final_metadata_600.json",
+            "seeds": "final_jd_seeds_fixed.json" 
         }
-        self.data = {}
-        # 필요하다면 여기서 파일을 로드할 수 있음. 
-        # 현재 MatchingEngine은 pickle 파일을 직접 로드하므로,
-        # 여기서는 경로 확인 정도만 수행하거나 비워둘 수 있음.
-        
-    def normalize(self, text):
-        if not text: return ""
-        return re.sub(r'[^a-zA-Z0-9]', '', str(text).lower())
 
 # ==========================================
-# 2. 매칭 엔진 (Hybrid Vector + Keyword)
+# 2. 매칭 엔진 클래스 (Core Logic)
 # ==========================================
 class MatchingEngine:
-    """
-    [Core Engine]
-    하이브리드 매칭 (벡터 55% + 키워드 35%) + [Metadata Bonus 10%]
-    + [Smart Calibration] (랜덤이 아닌, 실력 기반 점수 매핑)
-    """
+    # --------------------------------------
+    # 상수 및 설정 (Configuration)
+    # --------------------------------------
+    WEIGHT_VECTOR = 0.55       # S-BERT 유사도 가중치
+    WEIGHT_KEYWORD = 0.35      # 스킬 매칭 가중치
+    BONUS_ROLE_MATCH = 0.10    # 직무 일치 보너스 (Max)
+    GAP_THRESHOLD = 50.0       # 기술 갭(Skill Gap) 판단 기준 점수
 
-    # 1. 매칭 가중치 (Total 1.0)
-    WEIGHT_VECTOR = 0.55
-    WEIGHT_KEYWORD = 0.35
-    BONUS_ROLE_MATCH = 0.10
+    # 등급별 점수 구간 (엄격 적용)
+    SCORE_RANGES = [
+        (88.0, 97.0), # S (Rank 1)
+        (77.0, 86.0), # A (Rank 2)
+        (66.0, 75.0)  # B (Rank 3)
+    ]
 
-    # 2. 등급별 추천 기업 티어 (Quota)
+    # 티어별 추천 쿼터 (참고용)
     TIER_RULES = {
         "S": ["Top", "Top", "Mid"],
         "A": ["Top", "Mid", "Mid"],
@@ -79,229 +100,221 @@ class MatchingEngine:
         "C": ["Mid", "Low", "Low"],
         "F": ["Low", "Low", "Low"]
     }
-
-    # 3. 목표 점수 구간 (사용자 만족용)
-    SCORE_RANGES = [
-        (88.0, 97.0), # Rank 1
-        (77.0, 86.0), # Rank 2
-        (66.0, 75.0)  # Rank 3
-    ]
-
     # [NEW] 현실적인 Raw Score 기준점 (정규화 후 기준)
     RAW_SCORE_MIN = 0.30
     RAW_SCORE_MAX = 0.95
-    GAP_THRESHOLD = 0.50  # 0.5점(50점) 미만이면 경고
+    GAP_THRESHOLD_RATIO = 0.50  # 0.5점(50점) 미만이면 경고
+
 
     def __init__(self):
-        print("[Start] Matching Engine initializing...")
+        print("⚙️ Initializing Matching Engine (Dual List Applied)...")
+        self.loader = DataLoader()
+        self.base_path = self.loader.base_path
         
-        self.base_path = get_data_path()
-        self.model_name = "jhgan/ko-sroberta-multitask"
-        
-        # OpenAI Client (환경변수에서 키 로드)
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        if not api_key:
-            print("[Warning] OPENAI_API_KEY is not set in .env file.")
+        # 1. OpenAI 초기화
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.client = None
+        if self.openai_api_key:
+            try:
+                self.client = OpenAI(api_key=self.openai_api_key)
+                print("✅ OpenAI Client Connected")
+            except:
+                print("⚠️ OpenAI Connection Failed")
         else:
-            print(f"[Matching Engine] OpenAI API Key loaded successfully")
-        self.client = OpenAI(api_key=api_key) if api_key else None
+            print("⚠️ No OPENAI_API_KEY found")
 
-        # Model Load
-        print(f"   -> 모델 로드 중: {self.model_name}")
-        # 모델 로딩은 시간이 걸릴 수 있으므로, 실제 운영 환경에서는 싱글톤 패턴이나 시작 시 로드를 고려해야 함
-        # 여기서는 인스턴스 생성 시 로드
-        self.model = SentenceTransformer(self.model_name)
+        # 2. 모델 로드
+        try:
+            # User Modified Model
+            self.model = SentenceTransformer('jhgan/ko-sroberta-multitask')
+            print("[Start] Matching Engine initializing...")
+        except Exception as e:
+            print(f"⚠️ Model Load Failed: {e}")
+            self.model = None
 
-        # Data Load
-        self.company_data = self._load_company_vectors()
-        
-        # DataLoader 인스턴스 (보조용)
-        self.dl = DataLoader()
+        # 3. 데이터 로드 (캐싱 적용)
+        loaded_data = self._load_company_vectors()
+        if loaded_data:
+            self.companies = loaded_data['companies']
+            self.company_vectors = loaded_data['vectors']
+            print(f"✅ Engine Ready: {len(self.companies)} companies loaded.")
+        else:
+            self.companies = []
+            self.company_vectors = None
 
+    # --------------------------------------
+    # 내부 함수: 데이터 로딩 및 벡터화
+    # --------------------------------------
     def _load_company_vectors(self):
-        """pkl 파일 로드 또는 JSON에서 직접 로드 (개발 모드)"""
+        """PKL 캐시 우선 로드, 없으면 JSON 빌드"""
         pkl_path = self.base_path / "company_jd_vectors.pkl"
         json_path = self.base_path / "company_50_pool.json"
         
-        # 개발 모드: 환경 변수로 제어
-        use_json = os.getenv("USE_JSON_COMPANIES", "false").lower() == "true"
-        
-        # JSON 직접 로드 (개발 모드)
-        if use_json:
-            if json_path.exists():
-                print(f"   -> [개발 모드] JSON에서 기업 데이터 직접 로드: {json_path}")
-                try:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        companies = json.load(f)
-                    
-                    print(f"   -> 기업 데이터 로드 완료: {len(companies)}개 기업")
-                    
-                    # 벡터 생성
-                    print(f"   -> 벡터 생성 중...")
-                    texts = []
-                    for company in companies:
-                        # 기업 정보를 텍스트로 변환
-                        parts = []
-                        if company.get('name'):
-                            parts.append(company['name'])
-                        if company.get('industry'):
-                            parts.append(company['industry'])
-                        if company.get('tech_stack'):
-                            parts.append(" ".join(company['tech_stack']))
-                        if company.get('target_roles'):
-                            parts.append(" ".join(company['target_roles']))
-                        if company.get('location'):
-                            parts.append(company['location'])
-                        texts.append(" ".join(parts))
-                    
-                    # 모델로 벡터 생성 (self.model은 이미 __init__에서 로드됨)
-                    vectors = self.model.encode(texts, show_progress_bar=False, batch_size=32)
-                    
-                    print(f"   -> 벡터 생성 완료: {vectors.shape}")
-                    
-                    return {
-                        'companies': companies,
-                        'vectors': vectors
-                    }
-                except Exception as e:
-                    print(f"[Error] JSON 로드 중 오류: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    return None
-            else:
-                print(f"[Error] JSON 파일을 찾을 수 없습니다: {json_path}")
-                return None
-        
-        # 프로덕션 모드: pickle 파일 로드
-        if not pkl_path.exists():
-            print(f"[Error] Company vector file not found: {pkl_path}")
-            return None
-            
-        try:
-            with open(pkl_path, 'rb') as f:
-                data = pickle.load(f)
-            if isinstance(data, dict) and 'vectors' in data:
-                print(f"   -> 기업 데이터 로드 완료: {len(data['companies'])}개 기업 (pkl 파일)")
-                return data
-            else:
-                print("[Error] pkl file structure error")
-                return None
-        except Exception as e:
-            print(f"[Error] Data loading error: {e}")
-            return None
+        if pkl_path.exists():
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                if isinstance(data, dict) and 'vectors' in data:
+                    return data
+            except: pass
 
-    def _calculate_keyword_score(self, resume_text: str, tech_stack: List[str]) -> float:
-        if not tech_stack: return 0.5
-        resume_lower = resume_text.lower()
-        match_count = sum(1 for t in tech_stack if t.lower() in resume_lower)
-        return match_count / len(tech_stack)
-
-    def _calculate_missing_skills(self, resume_input: dict, company_tech_stack: List[str]) -> List[str]:
-        """
-        사용자가 보유하지 않은 기업 요구 스킬을 계산합니다.
-        대소문자 무시하고, 부분 문자열 매칭도 고려합니다.
-        """
-        if not company_tech_stack:
-            return []
-        
-        # 사용자 스킬 추출
-        content = resume_input.get('resume_content', {})
-        skills = content.get('skills', {})
-        user_skills = skills.get('essential', []) + skills.get('additional', [])
-        
-        # 사용자 스킬을 소문자로 정규화 (비교용)
-        user_skills_normalized = [skill.lower().strip() for skill in user_skills if skill]
-        
-        missing = []
-        for required_skill in company_tech_stack:
-            if not required_skill:
-                continue
+        if json_path.exists():
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    companies = json.load(f)
                 
-            required_normalized = required_skill.lower().strip()
-            
-            # 정확히 일치하는지 확인
-            if required_normalized in user_skills_normalized:
-                continue
-            
-            # 부분 문자열 매칭 확인 (예: "React"와 "React.js", "React Native")
-            is_matched = False
-            for user_skill in user_skills_normalized:
-                # 사용자 스킬이 요구 스킬을 포함하거나, 요구 스킬이 사용자 스킬을 포함하는 경우
-                if required_normalized in user_skill or user_skill in required_normalized:
-                    is_matched = True
-                    break
-            
-            if not is_matched:
-                missing.append(required_skill)
-        
-        return missing
+                if not self.model: return {'companies': companies, 'vectors': None}
 
-    def _calculate_metadata_bonus(self, candidate_role: str, company_target_roles: List[str]) -> float:
-        if not candidate_role or not company_target_roles: return 0.0
-        cand_role_lower = candidate_role.lower()
-        
-        for role in company_target_roles:
-            role_lower = role.lower()
-            # 1. 완전 일치 또는 포함 관계
-            if role_lower in cand_role_lower or cand_role_lower in role_lower:
-                return self.BONUS_ROLE_MATCH
-            
-            # 2. Fullstack 유연한 매칭 (FE/BE 모두 인정)
-            if "fullstack" in cand_role_lower and (role_lower in ["backend", "frontend"]):
-                return self.BONUS_ROLE_MATCH * 0.8
-            
-            # 3. AI/LLM Engineer 특화 매칭
-            if "ai" in cand_role_lower or "llm" in cand_role_lower:
-                if any(kw in role_lower for kw in ["nlp", "llm", "vision", "ai", "ml", "data"]):
-                    return self.BONUS_ROLE_MATCH
-            
-            # 4. UI/UX Designer 특화 매칭
-            if "ui/ux" in cand_role_lower or "designer" in cand_role_lower:
-                if any(kw in role_lower for kw in ["design", "ui", "ux", "product", "creative"]):
-                    return self.BONUS_ROLE_MATCH
-                    
-        return 0.0
+                texts = []
+                for comp in companies:
+                    # 기업 정보 텍스트화 (중요: 모든 필드 포함)
+                    parts = [
+                        comp.get('name', ''),
+                        comp.get('industry', ''),
+                        " ".join(comp.get('tech_stack', [])),
+                        " ".join(comp.get('target_roles', [])),
+                        comp.get('location', '')
+                    ]
+                    texts.append(" ".join(parts))
+                
+                vectors = self.model.encode(texts, show_progress_bar=False, batch_size=32)
+                
+                # 캐시 저장
+                try:
+                    with open(pkl_path, 'wb') as f:
+                        pickle.dump({'companies': companies, 'vectors': vectors}, f)
+                except: pass
+                
+                return {'companies': companies, 'vectors': vectors}
+            except: return None
+        return None
 
-    def _check_role_relevance(self, target_category: str, current_role: str) -> bool:
-        """
-        [Team Rule] 지원 직무와 이전 경력 직무 간의 유사성 판단
-        """
-        if not target_category or not current_role: return False
-        target_category = target_category.lower()
-        current_role = current_role.lower()
-        
-        # 기본 키워드 정의
-        relevance_keywords = [target_category, '기획', '개발', 'developer', 'manager', 'engineer', 'design']
-        
-        # 신규 직무별 확장 키워드
-        if "designer" in target_category or "ui/ux" in target_category:
-            relevance_keywords.extend(['art', 'creative', 'ux', 'ui', '디자인', '디자이너', '퍼블리셔'])
-        
-        if "ai" in target_category or "llm" in target_category:
-            relevance_keywords.extend(['researcher', 'scientist', 'nlp', 'ml', 'data', 'lab', '연구원'])
-        
-        if any(kw in current_role for kw in relevance_keywords):
-            return True
-        return False
+    # --------------------------------------
+    # 내부 함수: 텍스트 및 점수 처리 (Utils)
+    # --------------------------------------
+    def _normalize_text(self, text: str) -> str:
+        """대소문자 통일 및 특수문자 제거"""
+        if not text: return ""
+        text = text.lower()
+        text = re.sub(r'[^a-z0-9가-힣\s]', '', text)
+        return text.strip()
 
     def _normalize_vector_score(self, val: float) -> float:
-        """
-        [New] S-BERT Cosine Similarity 정규화
-        기계적 유사도(0.15~0.75)를 인간이 이해하는 점수(0.0~1.0)로 변환
-        """
+        """S-BERT 점수 정규화 (0.15~0.75 -> 0.0~1.0)"""
         min_bound = 0.15
         max_bound = 0.75
-
         normalized = (val - min_bound) / (max_bound - min_bound)
         return max(0.0, min(1.0, normalized))
 
     def get_grade(self, score: float) -> str:
         """점수 기반 등급 판정"""
-        if score >= 90: return "S"
-        if score >= 80: return "A"
-        if score >= 70: return "B"
-        if score >= 60: return "C"
+        if score >= 88: return "S"
+        if score >= 78: return "A"
+        if score >= 68: return "B"
+        if score >= 58: return "C"
         return "F"
+    
+    def _map_score_to_range(self, raw_score: float, target_min: float, target_max: float) -> float:
+        """
+        [Dynamic Scaling] 현실적인 입력 범위(Raw Score)를 목표 범위로 매핑
+        """
+        input_min, input_max = self.RAW_SCORE_MIN, self.RAW_SCORE_MAX
+
+        normalized = (raw_score - input_min) / (input_max - input_min)
+        normalized = max(0.0, min(1.0, normalized))
+
+        scaled_score = target_min + (normalized * (target_max - target_min))
+        return round(scaled_score, 1)
+
+    def _convert_resume_to_text(self, resume_input: Dict) -> str:
+        """이력서 객체를 텍스트로 변환"""
+        content = resume_input.get('resume_content', {})
+        target_role = resume_input.get('target_role', '')
+        
+        user_skills = []
+        if isinstance(content, dict):
+            skills = content.get('skills', {})
+            if isinstance(skills, dict):
+                user_skills = skills.get('essential', []) + skills.get('additional', [])
+            
+            tasks = []
+            for exp in content.get('professional_experience', []):
+                tasks.extend(exp.get('key_tasks', []))
+            exp_text = " ".join(tasks)
+        else:
+            exp_text = str(content)
+            
+        return f"{target_role} {' '.join(user_skills)} {exp_text}"
+
+    # --------------------------------------
+    # 내부 함수: 핵심 로직 (Logic)
+    # --------------------------------------
+    def _calculate_keyword_score(self, resume_text: str, tech_stack: List[str]) -> float:
+        """기술 스택 커버리지 계산"""
+        if not tech_stack: return 0.5
+        resume_lower = resume_text.lower()
+        match_count = sum(1 for skill in tech_stack if skill.lower() in resume_lower)
+        return match_count / len(tech_stack)
+
+    def _calculate_metadata_bonus(self, candidate_role: str, company_target_roles: List[str]) -> float:
+        """직무 연관성 보너스 (Fullstack, AI, UI/UX 특화)"""
+        if not candidate_role or not company_target_roles: return 0.0
+        cand_role_lower = candidate_role.lower()
+        
+        for role in company_target_roles:
+            role_lower = role.lower()
+            if role_lower in cand_role_lower or cand_role_lower in role_lower:
+                return self.BONUS_ROLE_MATCH
+            if "fullstack" in cand_role_lower and (role_lower in ["backend", "frontend"]):
+                return self.BONUS_ROLE_MATCH * 0.8
+            if "ai" in cand_role_lower or "llm" in cand_role_lower:
+                if any(kw in role_lower for kw in ["nlp", "llm", "vision", "ai", "ml", "data"]):
+                    return self.BONUS_ROLE_MATCH
+            if "ui/ux" in cand_role_lower or "designer" in cand_role_lower:
+                if any(kw in role_lower for kw in ["design", "ui", "ux", "product", "creative"]):
+                    return self.BONUS_ROLE_MATCH
+        return 0.0
+
+    def _check_role_relevance(self, target_category: str, current_role: str) -> bool:
+        """직무 연관성 체크 (키워드 매칭)"""
+        if not target_category or not current_role: return False
+        target_category = target_category.lower()
+        current_role = current_role.lower()
+        
+        relevance_keywords = [target_category, '기획', '개발', 'developer', 'manager', 'engineer', 'design']
+        
+        if "designer" in target_category or "ui/ux" in target_category:
+            relevance_keywords.extend(['art', 'creative', 'ux', 'ui', '디자인', '디자이너', '퍼블리셔'])
+        if "ai" in target_category or "llm" in target_category:
+            relevance_keywords.extend(['researcher', 'scientist', 'nlp', 'ml', 'data', 'lab', '연구원'])
+        
+        return any(kw in current_role for kw in relevance_keywords)
+
+    def _calculate_missing_skills(self, resume_input: Dict, company_stack: List[str]) -> List[str]:
+        """부족한 스킬 도출"""
+        if not company_stack: return []
+        content = resume_input.get('resume_content', {})
+        user_skills = []
+        if isinstance(content, dict):
+            skills = content.get('skills', {})
+            if isinstance(skills, dict):
+                user_skills = skills.get('essential', []) + skills.get('additional', [])
+        
+        user_norm = [s.lower().strip() for s in user_skills]
+        missing = []
+        for req in company_stack:
+            req_l = req.lower().strip()
+            if req_l in user_norm: continue
+            if not any(req_l in u or u in req_l for u in user_norm):
+                missing.append(req)
+        return missing
+
+    def _calculate_ats_detail(self, missing_skills: List[str], company_stack: List[str]) -> Dict[str, Any]:
+        """ATS 점수 상세 계산"""
+        total = len(company_stack)
+        if total == 0: return {"score": 100, "matched": 0, "total": 0}
+        matched = total - len(missing_skills)
+        return {"score": int((matched/total)*100), "matched": matched, "total": total}
 
     def verify_and_regrade(self, resume_input: dict, final_raw_score: float) -> float:
         """
@@ -347,27 +360,17 @@ class MatchingEngine:
             
         return min(1.0, refined_score)
 
-    def _map_score_to_range(self, raw_score: float, target_min: float, target_max: float) -> float:
-        """
-        [Dynamic Scaling] 현실적인 입력 범위(Raw Score)를 목표 범위로 매핑
-        """
-        input_min, input_max = self.RAW_SCORE_MIN, self.RAW_SCORE_MAX
-
-        normalized = (raw_score - input_min) / (input_max - input_min)
-        normalized = max(0.0, min(1.0, normalized))
-
-        scaled_score = target_min + (normalized * (target_max - target_min))
-        return round(scaled_score, 1)
-
+    # --------------------------------------
+    # 기업 분류 및 점수 산정 로직 (Main Logic)
+    # --------------------------------------
     def _categorize_companies(self, all_companies, vector_scores, resume_input, candidate_role):
         buckets = {"Top": [], "Mid": [], "Low": []}
         resume_text = self._convert_resume_to_text(resume_input)
         
-        # 0. 이력서 기본 정보 추출 (F등급 판정용)
+        # 0. 이력서 기본 정보 추출
         content = resume_input.get('resume_content', {})
         experiences = content.get('professional_experience', [])
         
-        # 경력 월수 추출
         actual_months = 0
         current_exp_role = ""
         if experiences:
@@ -376,7 +379,6 @@ class MatchingEngine:
             nums = re.findall(r'\d+', period_str)
             actual_months = int(nums[0]) if nums else 0
             
-        # 직무 관련성 체크
         is_relevant_role = self._check_role_relevance(candidate_role, current_exp_role)
 
         for idx, comp in enumerate(all_companies):
@@ -399,25 +401,32 @@ class MatchingEngine:
             base_hybrid_score = hybrid_score + meta_bonus
             
             # [추가] 직무 불일치 감점 (Conflict Penalty)
-            # 메타데이터 보너스가 0인데 벡터 점수만 높은 경우, 실제 직무가 다를 확률이 높으므로 감점
             if meta_bonus == 0 and v_norm > 0.4:
-                base_hybrid_score -= 0.15 # 약 15점 감점
+                base_hybrid_score -= 0.15 
             
-            # 5. [Ghost F 해결] 정밀 재채점 (학력/경력 가중치 반영)
+            # 5. [Ghost F 해결] 정밀 재채점
             final_raw_score = self.verify_and_regrade(resume_input, base_hybrid_score)
 
-            # 6. [Team Rule] F등급 강제 판정 로직 (무경력/무관직무/기술매칭0)
+            # 6. [Team Rule] F등급 강제 판정 조건 강화
             is_forced_f = False
             f_reason = ""
+            
+            # (1) 무경력
             if actual_months == 0:
                 is_forced_f = True
-                f_reason = "무경력자(신입)"
+                f_reason = "실무 경력 없음(신입)"
+            # (2) 직무 불일치
             elif not is_relevant_role:
                 is_forced_f = True
-                f_reason = "직무 불일치"
-            elif k_score == 0 and v_norm < 0.3: # 기술 매칭이 매우 낮은 경우
+                f_reason = "직무 연관성 부족"
+            # (3) 기술 역량 미달
+            elif k_score == 0 and v_norm < 0.3:
                 is_forced_f = True
-                f_reason = "기술 역량 부족"
+                f_reason = "핵심 기술 역량 부족"
+            # (4) 이력서 내용 부족 (New)
+            elif len(resume_text) < 50:
+                is_forced_f = True
+                f_reason = "이력서 내용 부족"
 
             if is_forced_f:
                 # F등급 점수 제한 (최대 59점)
@@ -426,10 +435,13 @@ class MatchingEngine:
                 # C등급 이상 점수 보정 (최소 60점)
                 if final_raw_score < 0.60:
                     final_raw_score = 0.60
+            
+            # 100점 만점 환산
+            final_score_100 = final_raw_score * 100
 
-            # 7. 부족한 스킬 계산 (사용자가 보유하지 않은 기업 요구 스킬)
+            # 7. 부족한 스킬 계산
             missing_skills = self._calculate_missing_skills(resume_input, comp.get('tech_stack', []))
-
+            
             comp_data = {
                 "metadata": {
                     "company_name": comp["name"],
@@ -437,20 +449,16 @@ class MatchingEngine:
                     "industry": comp["industry"],
                     "tier": comp.get("tier", "Low")
                 },
-                "tech_stack": comp.get("tech_stack", []), # 내부 로직용
-                "raw_score": final_raw_score,
+                "tech_stack": comp.get("tech_stack", []),
+                "raw_score": final_score_100,
                 "vector_raw": round(v_raw, 2),
                 "vector_norm": round(v_norm, 2),
                 "keyword_raw": round(k_score, 2),
                 "meta_bonus": round(meta_bonus, 2),
                 "is_forced_f": is_forced_f,
-                "f_reason": f_reason
+                "f_reason": f_reason,
+                "missing_skills": missing_skills
             }
-            # MatchResult 모델 호환성을 위해 flat 하게 저장하지 않고 metadata 구조 유지하되,
-            # 내부 로직에서는 comp_data 접근
-            
-            # API 호환을 위해 company_name 등은 metadata 안에 넣고, 
-            # 추천 로직 내에서는 편의상 키 접근
 
             tier = comp.get("tier", "Low")
             if tier not in buckets: tier = "Low"
@@ -461,54 +469,15 @@ class MatchingEngine:
 
         return buckets
 
-    def _convert_resume_to_text(self, resume_input: dict) -> str:
-        """
-        이력서 JSON 객체를 임베딩 가능한 텍스트로 변환
-        """
-        parts = []
-        
-        # 1. 스킬
-        content = resume_input.get('resume_content', {})
-        skills = content.get('skills', {})
-        essential = skills.get('essential', [])
-        additional = skills.get('additional', [])
-        all_skills = essential + additional
-        if all_skills:
-            parts.append(f"Technical Skills: {', '.join(all_skills)}")
-            
-        # 2. 경력 (Key Tasks 위주)
-        experiences = content.get('professional_experience', [])
-        for exp in experiences:
-            role = exp.get('role', '')
-            tasks = exp.get('key_tasks', [])
-            parts.append(f"Role: {role}")
-            if tasks:
-                parts.append(f"Tasks: {', '.join(tasks)}")
-                
-        # 3. 프로젝트
-        projects = content.get('project_experience', [])
-        for proj in projects:
-            title = proj.get('project_title', '')
-            achievements = proj.get('key_achievements', [])
-            parts.append(f"Project: {title}")
-            if achievements:
-                parts.append(f"Achievements: {', '.join(achievements)}")
-                
-        # 4. 분석된 직무 (Target Role)
-        classification = resume_input.get('classification', {})
-        role = classification.get('predicted_role', '')
-        if not role:
-             role = resume_input.get('target_role', '')
-        if role:
-            parts.append(f"Target Role: {role}")
-            
-        return "\n".join(parts)
-
+    # --------------------------------------
+    # [New] AI 피드백 생성 (Advanced Feedback)
+    # --------------------------------------
     def generate_xai_feedback(self, resume_input: dict, recommendations: List[Dict]) -> str:
         """
-        [기능 강화] 전문적이고 객관적인 AI 피드백 생성
-        - 등급별 톤 조절 (S/A/B: 긍정/전문, C/F: 냉철/분석)
-        - 직무 적합도 상세 분석 및 보강 제안 포함
+        전문적이고 객관적인 AI 피드백 생성
+        - 등급별 톤 조절 및 상세 분석
+        - [수정] 기업 매칭 결과를 맨 뒤로 이동
+        - [수정] 직무 연관성을 수치 대신 정성적 표현(최적합/적당하다/부족하다)으로 변경
         """
         feedback_lines = ["\n종합 AI 코치 의견:"]
 
@@ -518,28 +487,30 @@ class MatchingEngine:
 
         # 1. 기본 정보 추출
         top_rec = recommendations[0]
-        top_company_name = top_rec['metadata']['company_name']
+        # 추천 리스트 구조 호환성 (metadata 안에 있거나 top level에 있거나)
+        top_company_name = top_rec.get('metadata', {}).get('company_name') or top_rec.get('company_name', '추천 기업')
         top_score = top_rec['match_score']
-        top_note = top_rec.get('note', '')
+        # note는 match_type으로 매핑
+        top_note = top_rec.get('match_type', 'Good Fit')
         
         classification = resume_input.get('classification', {})
         predicted_role = classification.get('predicted_role') or resume_input.get('target_role', '미지정 직무')
         
         content = resume_input.get('resume_content', {})
-        resume_all_skills = set(content.get('skills', {}).get('essential', [])).union(set(content.get('skills', {}).get('additional', [])))
+        skills_data = content.get('skills', {})
+        resume_all_skills = set()
+        if isinstance(skills_data, dict):
+             resume_all_skills = set(skills_data.get('essential', [])).union(set(skills_data.get('additional', [])))
+
         experiences = content.get('professional_experience', [])
         projects = content.get('project_experience', [])
 
-        # 2. [기업 매칭 결과] 섹션
-        feedback_lines.append(f"\n[기업 매칭 결과]")
-        feedback_lines.append(f"대상 기업: {top_company_name}")
-        feedback_lines.append(f"평가 등급: {top_note} ({top_score}점)")
-        
-        tone_summary = "긍정적" if top_score >= 76 else "분석적"
-        feedback_lines.append(f"분석 요약: 해당 이력서는 {predicted_role} 포지션에 대해 {tone_summary}인 정합성을 보이고 있습니다.")
+        # ========================================================
+        # [순서 변경] 상세 분석 내용을 먼저 구성하고, 매칭 결과는 맨 뒤로 보냅니다.
+        # ========================================================
 
-        # 3. [직무 적합도 상세 분석] 섹션
-        feedback_lines.append(f"\n[직무 적합도 상세 분석]")
+        # 2. [직무 적합도 상세 분석] 섹션
+        job_fit_lines = ["\n[직무 적합도 상세 분석]"]
         
         # 기술 역량 분석
         tech_match_pct = int(top_rec.get('keyword_raw', 0) * 100)
@@ -551,7 +522,7 @@ class MatchingEngine:
             tech_fit_msg = f"{skills_str} 등 주요 기술 스택을 보유하고 있으나, 실무 활용 역량에 대한 보완이 권장됩니다."
         else:
             tech_fit_msg = "지원 직무에 필요한 핵심 기술 스택과 현재 보유하신 역량 간의 차이가 식별되었습니다."
-        feedback_lines.append(f"- 기술 역량: {tech_fit_msg}")
+        job_fit_lines.append(f"- 기술 역량: {tech_fit_msg}")
 
         # 실무 경험 분석
         exp_count = len(experiences)
@@ -560,14 +531,21 @@ class MatchingEngine:
             exp_fit_msg = f"{exp_role} 경력을 통한 실무 기여 가능성이 높음으로 분석됩니다."
         else:
             exp_fit_msg = "실무 경력 증빙이 부족하여, 프로젝트 경험을 통한 역량 증명이 요구됩니다."
-        feedback_lines.append(f"- 실무 경험: {exp_fit_msg}")
+        job_fit_lines.append(f"- 실무 경험: {exp_fit_msg}")
 
-        # 직무 연관성 분석
+        # [수정] 직무 연관성 분석 - 퍼센트 대신 정성적 표현 사용
         relevance_pct = int(top_rec.get('vector_norm', 0) * 100)
-        feedback_lines.append(f"- 직무 연관성: 지원하신 직무와 보유하신 경력 간의 연관성은 {relevance_pct}% 수준입니다.")
+        if relevance_pct >= 80:
+            relevance_term = "최적합 수준"
+        elif relevance_pct >= 60:
+            relevance_term = "적당한 수준"
+        else:
+            relevance_term = "다소 부족한 수준"
+        
+        job_fit_lines.append(f"- 직무 연관성: 지원하신 직무와 보유하신 경력 간의 연관성은 {relevance_term}으로 분석됩니다.")
 
-        # 4. [AI 보강 제안] 섹션
-        feedback_lines.append(f"\n[AI 보강 제안]")
+        # 3. [AI 보강 제안] 섹션
+        proposal_lines = ["\n[AI 보강 제안]"]
         
         proposals = []
         if top_score >= 76: # S/A/B
@@ -587,16 +565,30 @@ class MatchingEngine:
             else:
                 proposals.append("2. 프로젝트 상세화: 수행하신 프로젝트의 기술적 난이도와 본인의 기여도를 더 구체적으로 기술하십시오.")
 
-        feedback_lines.extend(proposals)
+        proposal_lines.extend(proposals)
+
+        # 4. [기업 매칭 결과] 섹션 (맨 뒤로 이동)
+        match_result_lines = ["\n[기업 매칭 결과]"]
+        match_result_lines.append(f"대상 기업: {top_company_name}")
+        match_result_lines.append(f"평가 등급: {top_note} ({top_score}점)")
+        
+        tone_summary = "긍정적" if top_score >= 76 else "분석적"
+        match_result_lines.append(f"분석 요약: 해당 이력서는 {predicted_role} 포지션에 대해 {tone_summary}인 정합성을 보이고 있습니다.")
+
+        # 최종 조합 (순서: 직무 적합도 -> 보강 제안 -> 기업 매칭 결과)
+        feedback_lines.extend(job_fit_lines)
+        feedback_lines.extend(proposal_lines)
+        feedback_lines.extend(match_result_lines)
 
         return "\n".join(feedback_lines)
 
-    def recommend(self, resume_input: dict):
-        """
-        FastAPI 라우터 호환용 메인 메소드
-        """
+    # ==========================================
+    # 메인 메소드 (FastAPI 호환)
+    # ==========================================
+    def recommend(self, resume_input: dict) -> Tuple[List[Dict], str]:
+        """FastAPI 라우터 호환용 메인 메소드"""
         # [방어 코드] 기업 데이터 확인
-        if not self.company_data:
+        if not self.companies or self.company_vectors is None:
             return [], "시스템 에러: 기업 데이터(Vector DB)가 로드되지 않았습니다."
 
         # 1. 이력서 텍스트 변환
@@ -604,60 +596,46 @@ class MatchingEngine:
         
         # 2. 직무 파악
         classification = resume_input.get('classification', {})
-        role = classification.get('predicted_role', '')
-        if not role:
-             role = resume_input.get('target_role', 'backend') # default
+        role = classification.get('predicted_role') or resume_input.get('target_role', 'backend')
 
         # 3. 벡터 임베딩 및 유사도 계산
-        query_vector = self.model.encode([resume_text])
-        all_vectors = self.company_data['vectors']
-        vector_scores = cosine_similarity(query_vector, all_vectors)[0]
+        if self.model:
+            query_vector = self.model.encode([resume_text])[0]
+            vector_scores = cosine_similarity([query_vector], self.company_vectors)[0]
+        else:
+            vector_scores = [0.0] * len(self.companies)
 
-        # 4. 버킷팅 및 점수 계산
-        buckets = self._categorize_companies(self.company_data['companies'], vector_scores, resume_input, role)
+        # 4. 버킷팅 및 점수 계산 (Main Scoring)
+        buckets = self._categorize_companies(self.companies, vector_scores, resume_input, role)
 
-        # 5. 등급 기반 기업 선정 (Smart Regrading 반영)
-        # 모든 기업 점수 데이터 수집
+        # 5. 등급 기반 기업 선정 (Smart Selection)
         all_comp_data = []
         for t in buckets: all_comp_data.extend(buckets[t])
         
-        # [Team Rule] 엔진이 판단한 강제 F 조건이 있는지 확인
+        # 강제 F등급 여부 확인
         is_candidate_forced_f = any(c.get('is_forced_f', False) for c in all_comp_data)
         
-        # candidate_grade 자동 계산
         resume_evaluation = resume_input.get('evaluation') or {}
         candidate_grade = resume_evaluation.get('grade')
         
         if is_candidate_forced_f:
-            # 강제 F 조건: 무경력자 또는 직무 불일치
             candidate_grade = "F"
-            print(f"   -> [Team Rule] Grade forced to F due to lack of experience or unrelated role.")
         elif candidate_grade is None:
-            # evaluation 필드가 없으면 점수 기반으로 자동 계산
             if all_comp_data:
-                # 상위 3개 기업의 평균 점수 사용 (더 정확한 등급 판단)
+                # 상위 3개 평균으로 자동 등급 산정
                 sorted_companies = sorted(all_comp_data, key=lambda x: x['raw_score'], reverse=True)
                 top_scores = [c['raw_score'] for c in sorted_companies[:3]]
                 avg_score = sum(top_scores) / len(top_scores) if top_scores else 0.0
-                
-                # raw_score는 0.0~1.0 범위이므로 0~100으로 변환하여 등급 판정
-                score_100 = avg_score * 100
-                candidate_grade = self.get_grade(score_100)
-                print(f"   -> [Auto Grade] Calculated grade: {candidate_grade} (Avg Top-3 Score: {score_100:.1f}/100)")
+                candidate_grade = self.get_grade(avg_score)
             else:
-                # 기업 데이터가 없으면 기본값 B
                 candidate_grade = "B"
-                print(f"   -> [Auto Grade] No company data, defaulting to B")
         elif candidate_grade == "F":
-            # 분석 API에서는 F를 줬으나, 엔진 점수가 높게 나온 경우 (Ghost F 구제)
-            # 전체 기업 평균 점수를 기반으로 잠재 등급 확인
-            all_raw_scores = [c['raw_score'] for c in all_comp_data]
-            if all_raw_scores:
-                avg_score = sum(all_raw_scores) / len(all_raw_scores)
-                if avg_score > 0.6: # C등급 이상 점수가 충분히 나옴
-                    candidate_grade = "C"
-                    print(f"   -> [Ghost F Recovery] Grade F -> {candidate_grade} (Avg Score: {avg_score:.2f})")
+            # Ghost F Recovery (구제 로직)
+            all_raw = [c['raw_score'] for c in all_comp_data]
+            if all_raw and (sum(all_raw)/len(all_raw)) > 60:
+                candidate_grade = "C"
 
+        # 타겟 티어 선정
         target_slots = self.TIER_RULES.get(candidate_grade, self.TIER_RULES["B"])
         final_selection = []
         used_companies = set()
@@ -665,78 +643,91 @@ class MatchingEngine:
         for required_tier in target_slots:
             selected = None
             for comp in buckets.get(required_tier, []):
-                comp_name = comp['metadata']['company_name']
-                if comp_name not in used_companies:
+                if comp['metadata']['company_name'] not in used_companies:
                     selected = comp
                     break
-
+            
+            # Fallback (해당 티어에 없으면 다른 티어 검색)
             if not selected:
-                search_order = ["Top", "Mid", "Low"] if required_tier == "Top" else ["Mid", "Low", "Top"]
-                for tier in search_order:
+                order = ["Top", "Mid", "Low"] if required_tier == "Top" else ["Mid", "Low", "Top"]
+                for tier in order:
                     for comp in buckets.get(tier, []):
-                        comp_name = comp['metadata']['company_name']
-                        if comp_name not in used_companies:
+                        if comp['metadata']['company_name'] not in used_companies:
                             selected = comp
                             break
                     if selected: break
-
+            
             if selected:
-                used_companies.add(selected['metadata']["company_name"])
+                used_companies.add(selected['metadata']['company_name'])
                 final_selection.append(selected)
 
-        # 6. 점수 매핑 (Smart Calibration) 및 결과 포맷팅
-        formatted_results = []
+        # 6. 점수 매핑 및 포맷팅
+        formatted_results = [] # 응답용 (Slim)
+        full_data_results = [] # 내부용 (Full)
+
         for i, res in enumerate(final_selection):
             # Dynamic Scaling
             if i < len(self.SCORE_RANGES):
                 min_s, max_s = self.SCORE_RANGES[i]
                 final_score = self._map_score_to_range(res['raw_score'], min_s, max_s)
             else:
-                final_score = round(res['raw_score'] * 100, 1)
+                final_score = round(res['raw_score'], 1)
 
-            # Note 설정 및 match_level 매핑
             if i == 0:
                 note = "Best Match"
                 match_level = "BEST"
-            elif res['raw_score'] < self.GAP_THRESHOLD:
+            elif res['raw_score'] < self.GAP_THRESHOLD_RATIO:
                 note = "Skill Gap"
                 match_level = "GAP"
             else:
                 note = "High Fit"
                 match_level = "HIGH"
 
-            # 내부 딕셔너리 업데이트 (feedback 생성용)
-            res['match_score'] = final_score
-            res['note'] = note
-            
-            # API 반환용 구조로 변환
-            # MatchResult: company_name, match_score, tier, match_type, reason
-            # api/routes.py 호환을 위해 raw_score, is_exact_match 추가
-            formatted_results.append({
-                "metadata": res['metadata'], # 기존 구조 호환
-                "company_name": res['metadata']['company_name'], # API 필드
+            # ATS 상세 정보 역산 (Full 데이터용)
+            ats_data = self._calculate_ats_detail(res.get('missing_skills', []), res.get('tech_stack', []))
+
+            # 1. 내부용 Full Data (피드백 생성에 필요)
+            full_entry = {
+                "metadata": res['metadata'],
+                "company_name": res['metadata']['company_name'],
                 "match_score": final_score,
                 "tier": res['metadata']['tier'],
                 "match_type": note,
                 "match_level": match_level,
                 "reason": f"Tech Match: {res['keyword_raw']*100:.0f}%, Vector: {res['vector_norm']:.2f}",
-                
-                # [Legacy Support] api/routes.py 호환
-                "raw_score": final_score, 
+                "raw_score": final_score,
                 "is_exact_match": (note == "Best Match") or (final_score >= 85),
-                
-                # 내부 로직용 필드 유지 (feedback 용)
                 "tech_stack": res['tech_stack'],
-                "missing_skills": res.get('missing_skills', []), # 부족한 스킬 목록
+                "missing_skills": res.get('missing_skills', []),
                 "note": note,
                 "keyword_raw": res['keyword_raw'],
-                "vector_norm": res['vector_norm']
-            })
+                "vector_norm": res['vector_norm'],
+                "ats_score": ats_data
+            }
+            full_data_results.append(full_entry)
 
-        # 7. 피드백 생성
-        report = self.generate_xai_feedback(resume_input, formatted_results)
+            # 2. 응답용 Slim Data (7개 필드 제거됨)
+            slim_entry = {
+                "company_name": res['metadata']['company_name'],
+                "match_score": final_score,
+                "tier": res['metadata']['tier'],
+                "match_type": note,
+                "match_level": match_level,
+                "missing_skills": res.get('missing_skills', []),
+                "note": note,
+                "is_exact_match": (note == "Best Match") or (final_score >= 85)
+            }
+            formatted_results.append(slim_entry)
 
-        return formatted_results, report
+        # 7. AI 피드백 생성 (Full Data 사용!)
+        report = self.generate_xai_feedback(resume_input, full_data_results)
 
-# Singleton Instance
-resume_engine = MatchingEngine()
+        # [수정] formatted_results 대신 full_data_results를 반환합니다.
+        # 이유: main.py가 tech_stack, reason 등을 필수 필드로 요구하기 때문에
+        # formatted_results를 보내면 500 에러가 발생합니다.
+        # 화면에도 Tech Stack을 보여주려면 Full Data가 필요합니다.
+        return full_data_results, report
+
+if __name__ == "__main__":
+    engine = MatchingEngine()
+    print("Engine Fully Initialized with All Features.")
