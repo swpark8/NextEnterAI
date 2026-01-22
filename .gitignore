@@ -131,3 +131,4 @@ mcp.json
 .cursorignore
 .cursor/
 .xml
+.yaml
