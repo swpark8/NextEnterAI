@@ -54,6 +54,7 @@ class ResumeRequest(BaseModel):
     
     # 2. 신규 구조 (Nested)
     resume_content: Optional[Dict[str, Any]] = None
+    raw_text: Optional[str] = None
     
     # 3. 구형 구조 (Flat) - 낱개로 들어올 경우를 대비
     education: Optional[List[Any]] = None
@@ -171,6 +172,7 @@ async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
         if not final_content:
             print("⚠️ 'resume_content' (포장 상자)가 없습니다. 낱개 데이터를 조립합니다.")
             final_content = {
+                "raw_text": request_obj.raw_text,
                 "education": request_obj.education or [],
                 "skills": request_obj.skills or {},
                 "professional_experience": request_obj.professional_experience or [],

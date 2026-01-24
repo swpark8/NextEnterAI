@@ -229,6 +229,11 @@ class MatchingEngine:
     def _convert_resume_to_text(self, resume_input: Dict) -> str:
         """이력서 객체를 텍스트로 변환"""
         content = resume_input.get('resume_content', {})
+
+        # [NEW] raw_text 필드가 있으면 최우선 사용 (구조화된 파싱 건너뜀)
+        if isinstance(content, dict) and content.get('raw_text'):
+            return content['raw_text']
+
         target_role = resume_input.get('target_role', '')
         
         user_skills = []
