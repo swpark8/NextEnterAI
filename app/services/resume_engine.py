@@ -229,27 +229,50 @@ class MatchingEngine:
     def _convert_resume_to_text(self, resume_input: Dict) -> str:
         """이력서 객체를 텍스트로 변환"""
         content = resume_input.get('resume_content', {})
+        text_parts = []
 
-        # [NEW] raw_text 필드가 있으면 최우선 사용 (구조화된 파싱 건너뜀)
+        # 1. raw_text (원본 텍스트)가 있으면 최우선적으로 포함
         if isinstance(content, dict) and content.get('raw_text'):
-            return content['raw_text']
+            text_parts.append(content['raw_text'])
 
+        # 2. target_role (희망 직무) 추가
         target_role = resume_input.get('target_role', '')
+        if target_role:
+            text_parts.append(target_role)
         
-        user_skills = []
         if isinstance(content, dict):
+            # 3. skills (기술 스택) 추출
             skills = content.get('skills', {})
+            user_skills = []
             if isinstance(skills, dict):
                 user_skills = skills.get('essential', []) + skills.get('additional', [])
+            elif isinstance(skills, list):
+                user_skills = skills
+            if user_skills:
+                text_parts.append(" ".join(user_skills))
             
-            tasks = []
+            # 4. professional_experience (경력 사항) 추출 - 역할 및 주요 업무 포함
+            exp_texts = []
             for exp in content.get('professional_experience', []):
-                tasks.extend(exp.get('key_tasks', []))
-            exp_text = " ".join(tasks)
+                if exp.get('role'): exp_texts.append(exp['role'])
+                tasks = exp.get('key_tasks', [])
+                if isinstance(tasks, list):
+                    exp_texts.extend(tasks)
+            if exp_texts:
+                text_parts.append(" ".join(exp_texts))
+
+            # 5. education (학력 사항) 추출 - 전공 및 학위 반영
+            edu_texts = []
+            for edu in content.get('education', []):
+                if edu.get('major'): edu_texts.append(edu['major'])
+                if edu.get('degree'): edu_texts.append(edu['degree'])
+            if edu_texts:
+                text_parts.append(" ".join(edu_texts))
         else:
-            exp_text = str(content)
+            text_parts.append(str(content))
             
-        return f"{target_role} {' '.join(user_skills)} {exp_text}"
+        # 모든 파트를 공백으로 구분하여 하나의 텍스트로 병합
+        return " ".join([p for p in text_parts if p]).strip()
 
     # --------------------------------------
     # 내부 함수: 핵심 로직 (Logic)
