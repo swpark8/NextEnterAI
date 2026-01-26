@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 # [핵심] 우리가 만든 엔진 임포트
 # (파일명이 resume_engine.py 라고 가정)
 from services.resume_engine import MatchingEngine
+from services.interview_engine import InterviewEngine
 
 # ==========================================
 # 1. FastAPI 앱 설정
@@ -40,6 +41,12 @@ except Exception as e:
     print(f"⚠️ Engine Load Error: {e}")
     engine = None
 
+try:
+    interview_engine = InterviewEngine()
+except Exception as e:
+    print(f"⚠️ Interview Engine Load Error: {e}")
+    interview_engine = None
+
 # ==========================================
 # 3. 데이터 모델 정의 (유연한 구조 적용)
 # ==========================================
@@ -66,6 +73,23 @@ class ResumeRequest(BaseModel):
     class Config:
         extra = "ignore" 
 
+class InterviewRequest(BaseModel):
+    id: Optional[str] = "USER_TEMP"
+    target_role: Optional[str] = Field(None, description="희망 직무")
+    classification: Optional[Dict[str, Any]] = None
+    evaluation: Optional[Dict[str, Any]] = None
+    resume_content: Optional[Dict[str, Any]] = None
+    portfolio: Optional[Dict[str, Any]] = None
+    last_answer: Optional[str] = None
+
+    education: Optional[List[Any]] = None
+    skills: Optional[Any] = None
+    professional_experience: Optional[List[Any]] = None
+    project_experience: Optional[List[Any]] = None
+
+    class Config:
+        extra = "ignore"
+
 # (2) 응답 데이터 구조 (변경 없음)
 class CompanyRecommendation(BaseModel):
     company_name: str
@@ -91,6 +115,23 @@ class AnalysisResponse(BaseModel):
     score: float
     ai_feedback: str
     recommendations: List[CompanyRecommendation]
+
+class InterviewReaction(BaseModel):
+    type: str
+    text: str
+
+class InterviewRealtime(BaseModel):
+    next_question: str
+    reaction: InterviewReaction
+    probe_goal: str
+    requested_evidence: List[str]
+    report: Optional[Dict[str, Any]] = None
+
+class InterviewResponse(BaseModel):
+    status: str = "success"
+    resume_id: str
+    target_role: str
+    realtime: InterviewRealtime
 
 # ==========================================
 # 4. Exception Handler (Pydantic 검증 에러 상세 처리)
@@ -229,6 +270,57 @@ async def recommend_resume_alias(resume_request: ResumeRequest):
     """
     print("🔄 Redirecting /recommend to /analyze...")
     return await analyze_resume(resume_request)
+
+@app.post("/api/v1/interview/next", response_model=InterviewResponse)
+async def interview_next(request: Request):
+    try:
+        body_dict = await request.json()
+        interview_request = InterviewRequest(**body_dict)
+
+        final_target_role = interview_request.target_role
+        if not final_target_role and interview_request.classification:
+            final_target_role = interview_request.classification.get("predicted_role")
+        if not final_target_role:
+            final_target_role = "backend"
+
+        final_content = interview_request.resume_content
+        if not final_content:
+            final_content = {
+                "education": interview_request.education or [],
+                "skills": interview_request.skills or {},
+                "professional_experience": interview_request.professional_experience or [],
+                "project_experience": interview_request.project_experience or []
+            }
+
+        resume_input = {
+            "id": interview_request.id,
+            "target_role": final_target_role,
+            "resume_content": final_content,
+            "classification": interview_request.classification or {},
+            "evaluation": interview_request.evaluation or {}
+        }
+
+        if not interview_engine:
+            raise Exception("Interview engine not initialized")
+
+        realtime = interview_engine.generate_response(
+            resume_input,
+            interview_request.portfolio,
+            interview_request.last_answer
+        )
+
+        response = {
+            "status": "success",
+            "resume_id": interview_request.id,
+            "target_role": final_target_role,
+            "realtime": realtime
+        }
+        return response
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Interview Engine Error: {str(e)}")
 
 @app.get("/")
 async def health_check():
