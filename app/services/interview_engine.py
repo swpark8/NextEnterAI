@@ -206,29 +206,43 @@ class InterviewEngine:
     def analyze_answer(self, answer: str) -> Dict[str, Any]:
         text = answer or ""
 
+        # STARR 패턴 정의 (Spec 기반)
+        # Situation: 상황, 이슈, 문제, 장애, 부채, 트래픽, 마감, 요구사항
         starr = {
-            "situation": self._has_pattern(text, [r"상황", r"당시", r"이슈", r"문제", r"장애", r"부채"]),
-            "task": self._has_pattern(text, [r"목표", r"과제", r"책임", r"담당", r"맡았"]),
-            "action": self._has_pattern(text, [r"구현", r"설계", r"도입", r"적용", r"개선", r"리팩터"]),
+            "situation": self._has_pattern(text, [r"상황", r"당시", r"이슈", r"문제", r"장애", r"부채", r"트래픽", r"요구사항", r"배경"]),
+            "task": self._has_pattern(text, [r"목표", r"과제", r"책임", r"담당", r"맡았", r"역할", r"요청"]),
+            "action": self._has_pattern(text, [r"구현", r"설계", r"도입", r"적용", r"개선", r"리팩터", r"최적화", r"개발", r"수정", r"분석"]),
             "result": self._has_pattern(text, [r"%", r"ms", r"초", r"배", r"증가", r"감소", r"개선", r"절감"]),
-            "reflection": self._has_pattern(text, [r"다음에는", r"다르게", r"회고", r"배운", r"교훈", r"아쉬"])
+            "reflection": self._has_pattern(text, [r"다음에는", r"다르게", r"회고", r"배운", r"교훈", r"아쉬", r"깨달", r"느꼈"])
         }
 
-        i_count = len(re.findall(r"\bI\b|저는|제가|내가|저의", text))
-        we_count = len(re.findall(r"우리|팀|함께", text))
+        # 개인 기여도 분석
+        # "제가", "저는", "나의" 등 1인칭 주어 카운트
+        i_count = len(re.findall(r"\b(저|제|내|나)\b|저는|제가|내가|저의|나의", text))
+        # "우리", "팀" 등 복수 주어 카운트
+        we_count = len(re.findall(r"우리|팀|함께|동료", text))
 
-        if i_count >= 2 and i_count >= we_count:
+        if i_count > 0 and i_count >= we_count:
             contribution = "clear"
         elif i_count == 0 and we_count > 0:
-            contribution = "unclear"
-        else:
+            contribution = "unclear" # "we" only
+        elif i_count > 0 and we_count > i_count:
             contribution = "mixed"
+        else:
+            # 주어가 명확하지 않은 경우, 문맥상 Action 동사가 많으면 clear로 간주할 수도 있으나, 보수적으로 mixed
+            contribution = "mixed" 
+            if starr["action"] and i_count == 0 and we_count == 0:
+                 # 주어 생략된 한국어 특성 고려: Action이 있으면 기여가 있다고 가정하되, 확실하지 않으므로 mixed 유지
+                 pass
 
         evidence_clips = []
-        for match in re.finditer(r"\d+\.?\d*\s?(?:%|ms|초|배|억원|만원)?", text):
+        # 숫자 + 단위 패턴 추출 (스펙: evidence_clips)
+        for match in re.finditer(r"\d+(?:\.\d+)?\s?(?:%|ms|초|배|억원|만원|건|회|개)?", text):
             raw = match.group(0).strip()
+            # 단순 숫자는 제외하고 단위가 있거나 의미있는 숫자만 (간이 로직)
             if raw and raw not in evidence_clips:
                 evidence_clips.append(raw)
+                
         return {
             "starr": starr,
             "contribution": contribution,
@@ -239,15 +253,26 @@ class InterviewEngine:
         starr = analysis.get("starr", {})
         contribution = analysis.get("contribution")
 
+        # Probing Logic 우선순위 (Spec: Trigger conditions)
+        
+        # 1. Action이 없으면 -> 기술적 실행 내용 질문
         if not starr.get("action"):
-            return "clarify", "구체적으로 어떤 기술적 조치를 취하셨는지 단계별로 설명해 주세요.", "기술 행동 확인", ["핵심 조치", "의사결정 근거"]
+            return "clarify", "구체적으로 어떤 기술적 조치를 취하셨는지 단계별로 설명해 주세요.", "기술 행동 확인", ["핵심 조치", "의사결정 근거", "사용 기술"]
+            
+        # 2. Result가 없으면 -> 정량적 성과 질문
         if not starr.get("result"):
-            return "clarify", "그 결과가 어떤 지표로 개선되었는지 수치로 설명해 주세요.", "정량 결과 확인", ["전후 수치", "영향 범위"]
+            return "clarify", "그 결과가 어떤 지표로 개선되었는지 수치로 설명해 주세요.", "정량 결과 확인", ["전후 수치", "영향 범위", "비즈니스 임팩트"]
+            
+        # 3. 기여도가 불분명하면 -> 개인 기여 질문
         if contribution == "unclear":
-            return "clarify", "팀 성과 중에서 본인이 직접 기여한 부분을 구체적으로 알려 주세요.", "개인 기여 확인", ["직접 구현", "주도 결정"]
+            return "clarify", "팀 성과 중에서 지원자님이 직접 기여한 부분을 구체적으로 알려 주세요.", "개인 기여 확인", ["직접 구현", "주도 결정", "역할 분담"]
+            
+        # 4. Reflection이 없으면 -> 회고 질문
         if not starr.get("reflection"):
-            return "reflect", "다시 한다면 어떤 부분을 다르게 하실지 회고 관점에서 이야기해 주세요.", "성찰 확인", ["개선점", "학습"]
-        return "paraphrase", "말씀하신 내용을 정리하면, 핵심 문제를 해결하기 위해 구체적 행동을 취했고 성과를 냈다는 이해가 맞나요?", "이해 확인", ["핵심 요약"]
+            return "reflect", "다시 한다면 어떤 부분을 다르게 하실지, 혹은 이 경험을 통해 배운 점은 무엇인가요?", "성찰 확인", ["개선점", "학습", "아쉬운 점"]
+            
+        # 5. 모든 요소가 충족되면 -> 정리 및 확인 (Paraphrase)
+        return "paraphrase", "말씀하신 내용을 정리하면, 핵심 문제를 주도적으로 해결하여 성과를 냈다는 점이 인상깊습니다. 이 경험에서 가장 큰 기술적 챌린지는 무엇이었나요?", "심화 탐색", ["기술적 난이도", "추가 디테일"]
 
     def _score_from_starr(self, starr: Dict[str, bool]) -> float:
         score = 3.0
