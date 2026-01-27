@@ -132,6 +132,25 @@ class InterviewEngine:
         "ai": ["ai", "llm", "ml", "nlp", "rag"]
     }
 
+    def __init__(self):
+        import os
+        from dotenv import load_dotenv
+        import google.generativeai as genai
+        
+        load_dotenv()
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            print("⚠️ GOOGLE_API_KEY not found. Gemini features will be disabled.")
+            self.model = None
+        else:
+            try:
+                genai.configure(api_key=api_key)
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                print("✅ Gemini Integration Initialized")
+            except Exception as e:
+                print(f"⚠️ Gemini Connection Error: {e}")
+                self.model = None
+
     def normalize_role(self, target_role: Optional[str]) -> str:
         if not target_role:
             return "backend"
@@ -330,32 +349,67 @@ class InterviewEngine:
             "evidence_clips": analysis.get("evidence_clips", [])
         }
 
+    def refine_with_llm(self, role: str, context_text: str, instruction: str, last_user_answer: Optional[str] = None) -> str:
+        """
+        Gemini를 사용하여 딱딱한 Rule-based 텍스트를 자연스러운 면접관 말투로 변환
+        """
+        if not self.model:
+            return context_text # LLM 없으면 원본 반환
+
+        prompt = f"""
+        당신은 {role} 직군 전문 면접관입니다.
+        지원자의 답변: "{last_user_answer if last_user_answer else '(없음/첫 질문)'}"
+        
+        당신의 의도(Instruction): {instruction}
+        기계적인 멘트: "{context_text}"
+
+        위 '기계적인 멘트'와 '의도'를 바탕으로, 지원자에게 건넬 자연스럽고 정중하면서도 날카로운 면접 질문을 한국어로 한 문장으로 작성해주세요.
+        지원자의 답변 내용을 반영하여 맥락이 이어지도록 해주세요.
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            print(f"⚠️ Gemini Error: {e}")
+            return context_text
+
     def generate_response(self, resume_input: Dict[str, Any], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str]) -> Dict[str, Any]:
         target_role = resume_input.get("classification", {}).get("predicted_role") or resume_input.get("target_role")
         role = self.normalize_role(target_role)
 
+        # 1. 첫 질문 생성 (Seed Question)
         if not last_answer:
             question, probe_goal, requested_evidence = self.build_seed_question(role, resume_input.get("resume_content"), portfolio)
+            
+            # LLM으로 자연스럽게 다듬기
+            natural_question = self.refine_with_llm(role, question, f"지원자의 이력/포트폴리오를 바탕으로 {probe_goal}을 위한 첫 질문을 던지세요.", None)
+            
             return {
-                "next_question": question,
+                "next_question": natural_question,
                 "reaction": {
                     "type": "clarify",
-                    "text": "경험을 구체적으로 설명해 주세요."
+                    "text": "안녕하세요, 면접을 시작하겠습니다."
                 },
                 "probe_goal": probe_goal,
                 "requested_evidence": requested_evidence,
                 "report": None
             }
 
+        # 2. 답변 분석 및 꼬리질문 (Probing)
         analysis = self.analyze_answer(last_answer)
         reaction_type, reaction_text, probe_goal, requested_evidence = self.build_probe(analysis)
         report = self.build_report(role, analysis)
 
+        # LLM으로 리액션 및 질문 다듬기
+        # reaction_text는 "Rule-based 가이드" 역할
+        natural_reaction = self.refine_with_llm(role, reaction_text, f"지원자의 답변을 듣고 {probe_goal}을 확인하기 위한 꼬리질문을 하세요. {reaction_type} 전략을 사용하세요.", last_answer)
+
         return {
-            "next_question": reaction_text,
+            "next_question": natural_reaction, # 리액션 + 질문이 합쳐진 자연스러운 발화
             "reaction": {
                 "type": reaction_type,
-                "text": reaction_text
+                "text": natural_reaction
             },
             "probe_goal": probe_goal,
             "requested_evidence": requested_evidence,
