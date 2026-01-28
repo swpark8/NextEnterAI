@@ -512,7 +512,7 @@ class MatchingEngine:
     # --------------------------------------
     # [New] AI 피드백 생성 (Advanced Feedback)
     # --------------------------------------
-    def generate_xai_feedback(self, resume_input: dict, recommendations: List[Dict]) -> str:
+    def _generate_rule_based_feedback(self, resume_input: dict, recommendations: List[Dict]) -> str:
         """
         전문적이고 객관적인 AI 피드백 생성
         - 등급별 톤 조절 및 상세 분석
@@ -716,14 +716,10 @@ class MatchingEngine:
         if llm_feedback:
              return f"\n종합 AI 코치 의견:\n{llm_feedback}"
         else:
-             # Fallback to old rule-based logic (if LLM fails)
-             return self._generate_legacy_feedback(resume_input, recommendations)
+             # Fallback to rule-based logic (if LLM fails)
+             return self._generate_rule_based_feedback(resume_input, recommendations)
 
-    def _generate_legacy_feedback(self, resume_input, recommendations):
-        # (기존 Rule-based 로직을 여기로 이동하거나 복사해서 실패 시 사용)
-        # 시간 관계상 간단한 메시지로 대체하거나 기존 로직을 복구해야 함.
-        # 기존 로직이 너무 길어서 일단은 간단한 fallback 메시지만 남김.
-        return "\n(AI 연결 상태가 원활하지 않아 간략 리포트를 제공합니다.)\n전반적으로 우수한 역량을 보유하고 계십니다."
+
 
     # ==========================================
     # 메인 메소드 (FastAPI 호환)
