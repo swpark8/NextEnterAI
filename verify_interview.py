@@ -6,10 +6,10 @@ sys.path.append(".")
 print(f"PYTHONPATH: {sys.path}")
 
 # MOCK Dependencies
-from unittest.mock import MagicMock
-sys.modules["dotenv"] = MagicMock()
-sys.modules["google"] = MagicMock()
-sys.modules["google.generativeai"] = MagicMock()
+# from unittest.mock import MagicMock
+# sys.modules["dotenv"] = MagicMock()
+# sys.modules["google"] = MagicMock()
+# sys.modules["google.generativeai"] = MagicMock()
 
 try:
     from app.services.interview_engine import InterviewEngine
