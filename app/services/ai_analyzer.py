@@ -99,6 +99,12 @@ class AIAnalyzer:
             return self._get_fallback()
 
         try:
+            # API 응답 구조 검증
+            if 'choices' not in result or not result['choices']:
+                raise KeyError("Missing 'choices' in API response")
+            if 'message' not in result['choices'][0] or 'content' not in result['choices'][0]['message']:
+                raise KeyError("Missing 'message.content' in API response")
+            
             content_text = result['choices'][0]['message']['content']
             raw_data = json.loads(content_text)
             

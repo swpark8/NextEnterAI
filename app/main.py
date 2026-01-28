@@ -9,9 +9,9 @@ from typing import List, Dict, Any, Optional
 
 # [핵심] 우리가 만든 엔진 임포트
 # (파일명이 resume_engine.py 라고 가정)
-from services.resume_engine import MatchingEngine
-from services.interview_engine import InterviewEngine
-from services.file_parser import FileParser  # ✅ Import FileParser
+from app.services.resume_engine import MatchingEngine
+from app.services.interview_engine import InterviewEngine
+from app.services.file_parser import FileParser  # ✅ Import FileParser
 
 # ==========================================
 # 1. FastAPI 앱 설정
@@ -31,7 +31,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ... (omitted code) ...
+# ==========================================
+# 2. 엔진 인스턴스 및 세션 관리
+# ==========================================
+
+# Resume Engine 초기화
+engine = MatchingEngine()
+
+# Interview Engine 세션 관리 (메모리 기반)
+interview_engines: Dict[str, InterviewEngine] = {}
+
+def get_interview_engine(user_id: str) -> InterviewEngine:
+    """사용자별 면접 엔진 인스턴스 반환 (세션 관리)"""
+    if user_id not in interview_engines:
+        interview_engines[user_id] = InterviewEngine()
+    return interview_engines[user_id]
 
 # ==========================================
 # 3. 데이터 모델 정의 (유연한 구조 적용)
@@ -60,7 +74,40 @@ class ResumeRequest(BaseModel):
     class Config:
         extra = "ignore" 
 
-# ... (omitted code) ...
+# Interview 요청 모델
+class InterviewRequest(BaseModel):
+    id: Optional[str] = "USER_TEMP"
+    target_role: Optional[str] = None
+    resume_content: Optional[Dict[str, Any]] = None
+    last_answer: Optional[str] = None
+    portfolio: Optional[Dict[str, Any]] = None
+    portfolio_files: Optional[List[str]] = None
+    classification: Optional[Dict[str, Any]] = None
+    evaluation: Optional[Dict[str, Any]] = None
+    education: Optional[List[Any]] = None
+    skills: Optional[Any] = None
+    professional_experience: Optional[List[Any]] = None
+    project_experience: Optional[List[Any]] = None
+    
+    class Config:
+        extra = "ignore"
+
+# Interview 응답 모델
+class InterviewResponse(BaseModel):
+    status: str
+    resume_id: str
+    target_role: str
+    realtime: Dict[str, Any]
+
+# Analysis 응답 모델
+class AnalysisResponse(BaseModel):
+    status: str
+    resume_id: str
+    target_role: str
+    grade: str
+    score: float
+    ai_feedback: Any
+    recommendations: List[Any]
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
 async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
