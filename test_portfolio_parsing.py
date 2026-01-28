@@ -16,7 +16,7 @@ def test_parsing():
     # Cleanup
     try:
         os.remove("test_portfolio.docx")
-    except:
+    except (FileNotFoundError, PermissionError):
         pass
 
 if __name__ == "__main__":

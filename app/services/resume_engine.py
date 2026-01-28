@@ -60,7 +60,8 @@ def get_data_path() -> Path:
     try:
         (cwd / "data").mkdir(exist_ok=True)
         return cwd / "data"
-    except:
+    except (FileNotFoundError, PermissionError) as e:
+        print(f"⚠️ Failed to create data directory: {e}")
         return cwd / "app" / "data"
 
 class DataLoader:
@@ -118,8 +119,8 @@ class MatchingEngine:
             try:
                 self.openai_client = OpenAI(api_key=self.openai_api_key)
                 print("✅ OpenAI Client Connected")
-            except:
-                print("⚠️ OpenAI Connection Failed")
+            except Exception as e:
+                print(f"⚠️ OpenAI Connection Failed: {e}")
         else:
             print("⚠️ No OPENAI_API_KEY found")
 
@@ -168,7 +169,8 @@ class MatchingEngine:
                     data = pickle.load(f)
                 if isinstance(data, dict) and 'vectors' in data:
                     return data
-            except: pass
+            except (FileNotFoundError, PermissionError, Exception) as e:
+                print(f"⚠️ Failed to load pickle cache: {e}")
 
         if json_path.exists():
             try:
@@ -195,10 +197,13 @@ class MatchingEngine:
                 try:
                     with open(pkl_path, 'wb') as f:
                         pickle.dump({'companies': companies, 'vectors': vectors}, f)
-                except: pass
+                except (FileNotFoundError, PermissionError) as e:
+                    print(f"⚠️ Failed to save pickle cache: {e}")
                 
                 return {'companies': companies, 'vectors': vectors}
-            except: return None
+            except (FileNotFoundError, PermissionError, json.JSONDecodeError) as e:
+                print(f"⚠️ Failed to load company data: {e}")
+                return None
         return None
 
     # --------------------------------------

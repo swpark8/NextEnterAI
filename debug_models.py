@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    print("⚠️ GOOGLE_API_KEY not found. Cannot configure Gemini.")
+    exit(1)
 genai.configure(api_key=api_key)
 
 print("Listing models...")
