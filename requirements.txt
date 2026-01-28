@@ -12,3 +12,4 @@ python-dotenv
 httpx
 pandas
 pytest
+google-generativeai
