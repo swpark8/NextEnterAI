@@ -96,3 +96,28 @@ def test_build_seed_question_priority(engine):
     # 3. Default Seed (둘 다 없음)
     q3, goal3, ev3 = engine.build_seed_question("backend", None, None)
     assert "트래픽" in q3 # Backend default seed keyword
+
+def test_full_interview_flow(engine):
+    # 1. Start
+    resume = {"target_role": "backend", "resume_content": {"skills": ["Python"]}}
+    res1 = engine.generate_response(resume, None, None)
+    
+    assert len(engine.chat_history) == 1
+    assert engine.chat_history[0]["role"] == "assistant"
+    assert "next_question" in res1
+    
+    # 2. User Answer
+    answer = "상황은(S) 트래픽이 많았고, 저는(I) 캐싱을 도입해서(A) 해결했습니다(R). 다음에는 더 잘하고 싶습니다(Ref)."
+    res2 = engine.generate_response(None, None, answer)
+    
+    assert len(engine.chat_history) == 4 # Q1, A1, Analysis1, Q2
+    assert engine.chat_history[1]["role"] == "user"
+    assert engine.chat_history[2]["type"] == "analysis"
+    assert engine.chat_history[3]["role"] == "assistant"
+    
+    # 3. Finalize
+    report = engine.finalize_interview()
+    assert report["total_score"] > 0
+    assert report["result"] in ["Pass", "Fail"]
+    assert "feedback" in report
+    assert "history_summary" in report

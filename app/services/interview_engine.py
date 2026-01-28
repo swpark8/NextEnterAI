@@ -151,6 +151,10 @@ class InterviewEngine:
                 print(f"⚠️ Gemini Connection Error: {e}")
                 self.model = None
 
+        # State Management
+        self.chat_history: List[Dict[str, Any]] = []
+        self.context: Dict[str, Any] = {}
+
     def normalize_role(self, target_role: Optional[str]) -> str:
         if not target_role:
             return "backend"
@@ -162,6 +166,9 @@ class InterviewEngine:
 
     def extract_resume_signals(self, resume_content: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         content = resume_content or {}
+        if not content:
+            return {"skills": [], "projects": [], "tasks": []}
+            
         skills = []
         skills_data = content.get("skills", {})
         if isinstance(skills_data, dict):
@@ -179,6 +186,9 @@ class InterviewEngine:
 
     def extract_portfolio_signals(self, portfolio: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         data = portfolio or {}
+        if not data:
+            return {"highlights": [], "projects": []}
+            
         highlights = data.get("highlights", []) or []
         projects = data.get("projects", []) or []
         return {
@@ -374,18 +384,31 @@ class InterviewEngine:
             print(f"⚠️ Gemini Error: {e}")
             return context_text
 
-    def generate_response(self, resume_input: Dict[str, Any], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str]) -> Dict[str, Any]:
-        target_role = resume_input.get("classification", {}).get("predicted_role") or resume_input.get("target_role")
-        role = self.normalize_role(target_role)
-
-        # 1. 첫 질문 생성 (Seed Question)
-        if not last_answer:
-            question, probe_goal, requested_evidence = self.build_seed_question(role, resume_input.get("resume_content"), portfolio)
+    def generate_response(self, resume_input: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str]) -> Dict[str, Any]:
+        # 1. Start Interview (Initial State)
+        if not self.chat_history:
+            # Store Context
+            self.context["resume"] = resume_input or {}
+            self.context["portfolio"] = portfolio or {}
             
-            # LLM으로 자연스럽게 다듬기
-            natural_question = self.refine_with_llm(role, question, f"지원자의 이력/포트폴리오를 바탕으로 {probe_goal}을 위한 첫 질문을 던지세요.", None)
+            target_role = self.context["resume"].get("classification", {}).get("predicted_role") or self.context["resume"].get("target_role")
+            self.context["role"] = self.normalize_role(target_role)
             
-            return {
+            # Generate Seed Question
+            question, probe_goal, requested_evidence = self.build_seed_question(
+                self.context["role"], 
+                self.context["resume"].get("resume_content"), 
+                self.context["portfolio"]
+            )
+            
+            natural_question = self.refine_with_llm(
+                self.context["role"], 
+                question, 
+                f"지원자의 이력/포트폴리오를 바탕으로 {probe_goal}을 위한 첫 질문을 던지세요.", 
+                None
+            )
+            
+            response_data = {
                 "next_question": natural_question,
                 "reaction": {
                     "type": "clarify",
@@ -395,18 +418,53 @@ class InterviewEngine:
                 "requested_evidence": requested_evidence,
                 "report": None
             }
+            
+            # Update History
+            self.chat_history.append({
+                "role": "assistant",
+                "type": "question",
+                "content": natural_question,
+                "metadata": response_data
+            })
+            
+            return response_data
 
-        # 2. 답변 분석 및 꼬리질문 (Probing)
+        # 2. Continue Interview (Follow-up)
+        # Save User Answer
+        if last_answer:
+            self.chat_history.append({
+                "role": "user",
+                "content": last_answer
+            })
+        else:
+            # Handle empty answer case if needed, or assume frontend prevents it.
+            # For now, if empty, we might just re-ask or ask to elaborate.
+             pass
+
+        # Analyze Answer
         analysis = self.analyze_answer(last_answer)
+        
+        # Save Analysis
+        self.chat_history.append({
+            "role": "system",
+            "type": "analysis",
+            "content": analysis
+        })
+
+        role = self.context.get("role", "backend")
         reaction_type, reaction_text, probe_goal, requested_evidence = self.build_probe(analysis)
-        report = self.build_report(role, analysis)
+        report = self.build_report(role, analysis) # Report applies to the specific answer only for now
 
-        # LLM으로 리액션 및 질문 다듬기
-        # reaction_text는 "Rule-based 가이드" 역할
-        natural_reaction = self.refine_with_llm(role, reaction_text, f"지원자의 답변을 듣고 {probe_goal}을 확인하기 위한 꼬리질문을 하세요. {reaction_type} 전략을 사용하세요.", last_answer)
+        # LLM Refinement
+        natural_reaction = self.refine_with_llm(
+            role, 
+            reaction_text, 
+            f"지원자의 답변을 듣고 {probe_goal}을 확인하기 위한 꼬리질문을 하세요. {reaction_type} 전략을 사용하세요.", 
+            last_answer
+        )
 
-        return {
-            "next_question": natural_reaction, # 리액션 + 질문이 합쳐진 자연스러운 발화
+        response_data = {
+            "next_question": natural_reaction,
             "reaction": {
                 "type": reaction_type,
                 "text": natural_reaction
@@ -414,4 +472,74 @@ class InterviewEngine:
             "probe_goal": probe_goal,
             "requested_evidence": requested_evidence,
             "report": report
+        }
+
+        # Update History
+        self.chat_history.append({
+            "role": "assistant",
+            "type": "question",
+            "content": natural_reaction,
+            "metadata": response_data
+        })
+
+        return response_data
+
+    def finalize_interview(self) -> Dict[str, Any]:
+        if not self.chat_history:
+            return {"error": "No interview history found."}
+
+        analyses = [item["content"] for item in self.chat_history if item.get("role") == "system" and item.get("type") == "analysis"]
+        if not analyses:
+            return {"error": "No analysis data found."}
+
+        # Calculate Average Score
+        total_score = 0.0
+        starr_counts = {"situation": 0, "task": 0, "action": 0, "result": 0, "reflection": 0}
+        
+        for analysis in analyses:
+            starr = analysis.get("starr", {})
+            total_score += self._score_from_starr(starr)
+            for key in starr_counts:
+                if starr.get(key):
+                    starr_counts[key] += 1
+        
+        count = len(analyses)
+        avg_score = round(total_score / count, 2)
+        
+        # Pass/Fail Criteria
+        # 1. Avg Score >= 3.0 (Basic completeness)
+        # 2. Action coverage >= 50% (Must describe actions half the time)
+        action_rate = starr_counts["action"] / count
+        result_status = "Pass" if avg_score >= 3.0 and action_rate >= 0.5 else "Fail"
+
+        # Construct Feedback
+        strengths = []
+        improvements = []
+        
+        if starr_counts["action"] == count:
+            strengths.append("모든 답변에서 구체적인 행동(Action)이 드러납니다.")
+        elif action_rate < 0.5:
+            improvements.append("문제 해결 과정에서의 본인의 행동(Action) 설명이 부족합니다.")
+            
+        if starr_counts["result"] == count:
+            strengths.append("성과(Result)를 정량적으로 잘 전달했습니다.")
+        elif starr_counts["result"] < count * 0.5:
+            improvements.append("결과를 수치나 지표로 표현하는 연습이 필요합니다.")
+            
+        if starr_counts["reflection"] == 0:
+            improvements.append("경험을 통해 배운 점(Reflection)에 대한 회고가 추가되면 좋겠습니다.")
+
+        return {
+            "total_score": avg_score,
+            "result": result_status,
+            "stats": {
+                "question_count": count,
+                "action_rate": f"{round(action_rate * 100)}%",
+                "starr_counts": starr_counts
+            },
+            "feedback": {
+                "strengths": strengths,
+                "improvements": improvements
+            },
+            "history_summary": self.chat_history
         }
