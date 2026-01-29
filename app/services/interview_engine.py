@@ -3,7 +3,7 @@ import os
 import json
 from typing import Any, Dict, List, Optional, Tuple
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from app.services.file_parser import FileParser
 
 class InterviewEngine:
@@ -12,25 +12,30 @@ class InterviewEngine:
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             print("⚠️ GOOGLE_API_KEY not found. Gemini features will be disabled.")
-            self.model = None
+            self.client = None
         else:
             try:
-                genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-2.0-flash')
+                # Initialize Client with explicit API key
+                self.client = genai.Client(api_key=api_key)
                 print("✅ Gemini Integration Initialized (Model: gemini-2.0-flash)")
             except Exception as e:
                 print(f"⚠️ Gemini Connection Error: {e}")
-                self.model = None
+                import traceback
+                traceback.print_exc()
+                self.client = None
 
         # State Management
         self.chat_history: List[Dict[str, Any]] = []
         self.context: Dict[str, Any] = {}
 
     def _call_llm(self, prompt: str) -> str:
-        if not self.model:
+        if not self.client:
             return ""
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt
+            )
             return response.text.strip()
         except Exception as e:
             print(f"⚠️ Gemini Generation Error: {e}")

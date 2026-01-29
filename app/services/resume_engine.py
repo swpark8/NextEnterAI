@@ -125,14 +125,14 @@ class MatchingEngine:
             print("⚠️ No OPENAI_API_KEY found")
 
         # 1.5 Gemini 초기화 (Backup)
+        # 1.5 Gemini 초기화 (Backup)
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        self.gemini_model = None
+        self.gemini_client = None
         if self.google_api_key:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.google_api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                print("✅ Google Gemini Client Connected (Backup)")
+                from google import genai
+                self.gemini_client = genai.Client(api_key=self.google_api_key)
+                print("✅ Google Gemini Client Connected (Backup - gemini-2.0-flash)")
             except Exception as e:
                 print(f"⚠️ Google Gemini Connection Failed: {e}")
         
@@ -649,9 +649,13 @@ class MatchingEngine:
                 print(f"⚠️ OpenAI request failed: {e}")
         
         # 2. Try Gemini (Fallback)
-        if self.gemini_model:
+        # 2. Try Gemini (Fallback)
+        if self.gemini_client:
             try:
-                response = self.gemini_model.generate_content(prompt)
+                response = self.gemini_client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt
+                )
                 return response.text.strip()
             except Exception as e:
                 print(f"⚠️ Gemini request failed: {e}")
