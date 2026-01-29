@@ -220,8 +220,28 @@ async def recommend_resume_alias(resume_request: ResumeRequest):
 @app.post("/api/v1/interview/next", response_model=InterviewResponse)
 async def interview_next(request: Request):
     try:
-        body_dict = await request.json()
-        interview_request = InterviewRequest(**body_dict)
+        # 1. Robust Body Parsing (Fix for Empty Body / Debugging)
+        body_bytes = await request.body()
+        if not body_bytes:
+             print("❌ [Error] Received 0 bytes body in /interview/next")
+             raise HTTPException(status_code=400, detail="Empty request body received")
+        
+        try:
+            body_json = await request.json()
+            print(f"🔍 [Interview Request] Raw JSON: {json.dumps(body_json, indent=None, ensure_ascii=False)[:300]}...") 
+        except Exception as e:
+            print(f"❌ [Error] Failed to parse JSON: {body_bytes.decode('utf-8')[:200]}")
+            raise HTTPException(status_code=400, detail="Invalid JSON format")
+
+        # 2. Convert to Pydantic Model manually
+        try:
+            interview_request = InterviewRequest(**body_json)
+        except ValidationError as ve:
+            print(f"❌ [Error] Pydantic Validation Failed: {ve}")
+            raise HTTPException(status_code=422, detail=f"Validation Error: {ve}")
+
+        # 3. Core Logic
+        print(f"🔍 [Interview Logic] id={interview_request.id}, role={interview_request.target_role}")
 
         final_target_role = interview_request.target_role
         if not final_target_role and interview_request.classification:
@@ -262,8 +282,11 @@ async def interview_next(request: Request):
             "target_role": final_target_role,
             "realtime": realtime
         }
+        print(f"📤 [Interview Response] Success for resume_id={interview_request.id}")
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
