@@ -285,12 +285,49 @@ async def interview_next(request: Request):
         print(f"📤 [Interview Response] Success for resume_id={interview_request.id}")
         return response
 
+
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Interview Engine Error: {str(e)}")
+
+class FinalizeRequest(BaseModel):
+    id: str
+
+@app.post("/api/v1/interview/finalize")
+async def interview_finalize(request: FinalizeRequest):
+    """
+    [POST] /api/v1/interview/finalize
+    면접을 종료하고 최종 평가 리포트를 반환합니다.
+    """
+    try:
+        print(f"🏁 Finalizing interview for ID: {request.id}")
+        
+        # 1. 엔진 인스턴스 조회
+        if request.id not in interview_engines:
+            raise HTTPException(status_code=404, detail="진행 중인 면접 세션이 없습니다.")
+            
+        itv_engine = get_interview_engine(request.id)
+        
+        # 2. 리포트 생성
+        result = itv_engine.finalize_interview()
+        
+        if "error" in result:
+             raise HTTPException(status_code=400, detail=result["error"])
+             
+        # 3. 세션 정리 (선택 사항: 리포트 생성 후 세션을 유지할지 삭제할지 결정. 여기서는 유지)
+        # del interview_engines[request.id] 
+        
+        print(f"✅ Final Report Generated: {result.get('result')}, Score: {result.get('total_score')}")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [Error] Finalize failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Finalize Error: {str(e)}")
 
 @app.get("/")
 async def health_check():
