@@ -124,8 +124,7 @@ class MatchingEngine:
         else:
             print("⚠️ No OPENAI_API_KEY found")
 
-        # 1.5 Gemini 초기화 (Backup)
-        # 1.5 Gemini 초기화 (Backup)
+        # 2.0 Gemini 초기화 (Backup)
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.gemini_client = None
         if self.google_api_key:
@@ -651,6 +650,7 @@ class MatchingEngine:
         # 2. Try Gemini (Fallback)
         # 2. Try Gemini (Fallback)
         if self.gemini_client:
+            print("🔄 Attempting fallback to Google Gemini...")
             try:
                 response = self.gemini_client.models.generate_content(
                     model='gemini-2.0-flash',
@@ -659,6 +659,8 @@ class MatchingEngine:
                 return response.text.strip()
             except Exception as e:
                 print(f"⚠️ Gemini request failed: {e}")
+        else:
+            print("⚠️ Fallback skipped: Google Gemini client is not initialized.")
         
         return "" # Both failed
 
