@@ -62,6 +62,8 @@ class InterviewEngine:
         prompt = f"""
         You are a technical interviewer for a {role} position.
         
+        This is the FIRST question of the interview. There is NO prior conversation.
+        
         Resume Summary:
         {json.dumps(resume_content, ensure_ascii=False, indent=2)}
 
@@ -72,8 +74,12 @@ class InterviewEngine:
         \"\"\"{portfolio_text or "No attached portfolio files."}\"\"\"
 
         Task:
-        Generate a "STAR" (Situation, Task, Action, Result) behavioral interview question based on the candidate's most significant project or experience.
-        If the portfolio content is available, prioritize asking about a specific project found in the portfolio files.
+        Generate an opening interview question in Korean that:
+        1. References a SPECIFIC project, experience, or skill from the candidate's resume
+        2. Asks them to explain it using the STAR method (Situation, Task, Action, Result)
+        3. Does NOT assume any prior conversation or context
+        
+        Example format: "이력서에 [구체적 프로젝트명/경험]이 있는데, 이 프로젝트에서 어떤 상황(Situation)에서 어떤 과제(Task)를 맡으셨고, 어떻게 해결(Action)하셨는지, 그 결과(Result)는 어땠는지 STAR 구조로 설명해 주시겠어요?"
         
         Output JSON:
         {{
