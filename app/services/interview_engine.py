@@ -27,6 +27,12 @@ class InterviewEngine:
         # State Management
         self.chat_history: List[Dict[str, Any]] = []
         self.context: Dict[str, Any] = {}
+        
+        # Phase Management (INTRO -> MAIN -> CLOSING)
+        self.current_phase: str = "INTRO"  # INTRO, MAIN, CLOSING
+        self.current_topic_probe_count: int = 0
+        self.max_probes_per_topic: int = 2  # 같은 주제에 대해 최대 2번까지만 추가 질문
+        self.topics_covered: List[str] = []  # 다룬 주제들 (프로젝트명 등)
 
     def _call_llm(self, prompt: str) -> str:
         if not self.client:
@@ -118,6 +124,74 @@ class InterviewEngine:
             data.get("question", "대표적인 프로젝트 경험을 STAR 구조로 설명해 주세요."),
             data.get("probe_goal", "핵심 역량 확인"),
             data.get("requested_evidence", ["구체적 행동", "정량적 성과"])
+        )
+
+    def build_intro_question(self, role: str, resume_content: Optional[Dict[str, Any]]) -> Tuple[str, str, List[str]]:
+        """Generate an introduction question (self-introduction, motivation)."""
+        resume_summary = self._resume_summary_for_prompt(resume_content)
+        prompt = f"""
+        You are a friendly technical interviewer for a {role} position.
+        
+        This is the VERY FIRST question - an ice-breaker to start the interview.
+        
+        Resume Summary:
+        {resume_summary}
+
+        Task:
+        Generate an opening question in Korean that:
+        1. Asks the candidate to briefly introduce themselves
+        2. Asks about their motivation for applying to this {role} position
+        3. Is warm and welcoming to reduce nervousness
+        
+        Example: "안녕하세요! 간단한 자기소개와 함께, {role} 포지션에 지원하게 된 동기를 말씀해 주시겠어요?"
+        
+        Output JSON:
+        {{
+            "question": "The introduction question in Korean",
+            "probe_goal": "지원 동기 및 열정 확인",
+            "requested_evidence": ["career motivation", "role fit"]
+        }}
+        """
+        
+        response_text = self._call_llm(prompt)
+        data = self._parse_json_response(response_text)
+        
+        return (
+            data.get("question", f"안녕하세요! 간단한 자기소개와 함께, {role} 포지션에 지원하게 된 동기를 말씀해 주시겠어요?"),
+            data.get("probe_goal", "지원 동기 및 열정 확인"),
+            data.get("requested_evidence", ["career motivation", "role fit"])
+        )
+
+    def build_closing_question(self, role: str) -> Tuple[str, str, List[str]]:
+        """Generate a closing question (future plans, questions for interviewer)."""
+        prompt = f"""
+        You are a friendly technical interviewer for a {role} position.
+        
+        The interview is coming to an end. Generate a closing question in Korean.
+        
+        Task:
+        Generate a final question that:
+        1. Asks about their future career goals or plans after joining
+        2. OR asks if they have any questions for the interviewer
+        3. Wraps up the interview in a positive tone
+        
+        Example: "마지막으로, 입사 후 어떤 개발자로 성장하고 싶으신지, 또는 저희에게 궁금한 점이 있으시면 말씀해 주세요."
+        
+        Output JSON:
+        {{
+            "question": "The closing question in Korean",
+            "probe_goal": "성장 비전 및 문화 적합성 확인",
+            "requested_evidence": ["growth mindset", "curiosity"]
+        }}
+        """
+        
+        response_text = self._call_llm(prompt)
+        data = self._parse_json_response(response_text)
+        
+        return (
+            data.get("question", "마지막으로, 입사 후 어떤 개발자로 성장하고 싶으신지, 또는 저희에게 궁금한 점이 있으시면 말씀해 주세요."),
+            data.get("probe_goal", "성장 비전 확인"),
+            data.get("requested_evidence", ["growth mindset", "curiosity"])
         )
 
     def analyze_answer(self, answer: str) -> Dict[str, Any]:
@@ -248,13 +322,14 @@ class InterviewEngine:
             "evidence_clips": analysis.get("evidence_clips", [])
         }
 
-    def generate_response(self, resume_input: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str], portfolio_files: Optional[List[str]] = None) -> Dict[str, Any]:
-        # 1. Start Interview
+    def generate_response(self, resume_input: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str], portfolio_files: Optional[List[str]] = None, total_turns: int = 5) -> Dict[str, Any]:
+        # 1. Start Interview (INTRO Phase)
         if not self.chat_history:
             self.context["resume"] = resume_input or {}
             self.context["portfolio"] = portfolio or {}
+            self.context["total_turns"] = total_turns # ✅ 전체 횟수 저장
             
-            # --- Portfolio File Parsing (New) ---
+            # --- Portfolio File Parsing ---
             portfolio_text = ""
             files_to_parse = portfolio_files or []
             if not files_to_parse and portfolio and "files" in portfolio:
@@ -266,12 +341,9 @@ class InterviewEngine:
                     parsed = FileParser.parse_file(file_path)
                     portfolio_text += f"\n--- File: {os.path.basename(file_path)} ---\n{parsed}\n"
             
-            # Store parsed text in context for LLM
             if portfolio_text:
                 self.context["portfolio_parsed_text"] = portfolio_text
                 print(f"✅ Portfolio Parsed Length: {len(portfolio_text)} chars")
-            
-
             
             target_role = (
                 self.context["resume"].get("classification", {}).get("predicted_role")
@@ -279,29 +351,32 @@ class InterviewEngine:
             )
             self.context["role"] = self.normalize_role(target_role)
             
-            question, probe_goal, requested_evidence = self.build_seed_question(
+            # [NEW] Start with INTRO question (자기소개)
+            self.current_phase = "INTRO"
+            question, probe_goal, requested_evidence = self.build_intro_question(
                 self.context["role"], 
-                self.context["resume"].get("resume_content"), 
-                self.context["portfolio"],
-                self.context.get("portfolio_parsed_text") # Pass parsed text
+                self.context["resume"].get("resume_content")
             )
+            print(f"🎬 [Phase: INTRO] Starting interview with introduction question")
             
             response_data = {
                 "next_question": question,
                 "reaction": {
-                    "type": "clarify",
-                    "text": "안녕하세요, AI 면접관입니다."
+                    "type": "welcome",
+                    "text": "안녕하세요, AI 면접관입니다. 편안하게 답변해 주세요."
                 },
                 "probe_goal": probe_goal,
                 "requested_evidence": requested_evidence,
-                "report": None
+                "report": None,
+                "phase": self.current_phase
             }
             
             self.chat_history.append({
                 "role": "assistant",
                 "type": "question",
                 "content": question,
-                "metadata": response_data
+                "metadata": response_data,
+                "phase": self.current_phase
             })
             
             return response_data
@@ -317,7 +392,7 @@ class InterviewEngine:
         last_question_item = next((item for item in reversed(self.chat_history) if item["role"] == "assistant"), None)
         last_question_text = last_question_item["content"] if last_question_item else ""
 
-        # Analyze
+        # Analyze answer
         analysis = self.analyze_answer(last_answer or "")
         self.chat_history.append({
             "role": "system",
@@ -325,28 +400,119 @@ class InterviewEngine:
             "content": analysis
         })
 
-        # Generate Probe
-        probe_data = self.build_probe(analysis, self.context.get("role", "backend"), last_question_text, last_answer or "")
+        # Calculate question count (for phase transitions)
+        question_count = len([h for h in self.chat_history if h.get("role") == "assistant" and h.get("type") == "question"])
+        total_turns = self.context.get("total_turns", 5)  # Default 5 turns
         
-        # Create Report for this turn
-        report = self.build_report(self.context.get("role", "backend"), analysis)
-        
-        response_data = {**probe_data, "report": report}
+        print(f"📊 [Phase: {self.current_phase}] Question #{question_count}, Probe count: {self.current_topic_probe_count}")
+
+        # [NEW] Phase Transition Logic
+        if self.current_phase == "INTRO":
+            # After intro answer, move to MAIN phase
+            self.current_phase = "MAIN"
+            self.current_topic_probe_count = 0
+            print(f"➡️ Transitioning to MAIN phase")
+            
+            # Generate first project question
+            question, probe_goal, requested_evidence = self.build_seed_question(
+                self.context["role"], 
+                self.context["resume"].get("resume_content"), 
+                self.context["portfolio"],
+                self.context.get("portfolio_parsed_text")
+            )
+            
+            response_data = {
+                "next_question": question,
+                "reaction": {"type": "acknowledge", "text": "네, 알겠습니다. 이제 본격적으로 면접을 시작하겠습니다."},
+                "probe_goal": probe_goal,
+                "requested_evidence": requested_evidence,
+                "report": self.build_report(self.context.get("role", "backend"), analysis),
+                "phase": self.current_phase
+            }
+            
+        elif self.current_phase == "MAIN":
+            # Check if we should move to CLOSING phase
+            if question_count >= total_turns - 1:  # Reserve last turn for closing
+                self.current_phase = "CLOSING"
+                print(f"➡️ Transitioning to CLOSING phase")
+                
+                question, probe_goal, requested_evidence = self.build_closing_question(self.context["role"])
+                
+                response_data = {
+                    "next_question": question,
+                    "reaction": {"type": "wrap_up", "text": "좋은 답변 감사합니다. 면접이 거의 마무리되어 갑니다."},
+                    "probe_goal": probe_goal,
+                    "requested_evidence": requested_evidence,
+                    "report": self.build_report(self.context.get("role", "backend"), analysis),
+                    "phase": self.current_phase
+                }
+            else:
+                # [NEW] Probe count limiting - prevent infinite follow-ups
+                self.current_topic_probe_count += 1
+                
+                starr = analysis.get("starr", {})
+                starr_filled = sum(1 for v in starr.values() if v)
+                
+                # Move to next topic if: probe limit reached OR STARR is sufficiently complete (3+ elements)
+                if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 3:
+                    print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
+                    self.current_topic_probe_count = 0
+                    
+                    # Generate new topic question
+                    question, probe_goal, requested_evidence = self.build_seed_question(
+                        self.context["role"], 
+                        self.context["resume"].get("resume_content"), 
+                        self.context["portfolio"],
+                        self.context.get("portfolio_parsed_text")
+                    )
+                    
+                    response_data = {
+                        "next_question": question,
+                        "reaction": {"type": "transition", "text": "좋습니다. 다른 경험에 대해서도 여쭤볼게요."},
+                        "probe_goal": probe_goal,
+                        "requested_evidence": requested_evidence,
+                        "report": self.build_report(self.context.get("role", "backend"), analysis),
+                        "phase": self.current_phase
+                    }
+                else:
+                    # Continue probing current topic
+                    probe_data = self.build_probe(analysis, self.context.get("role", "backend"), last_question_text, last_answer or "")
+                    report = self.build_report(self.context.get("role", "backend"), analysis)
+                    response_data = {**probe_data, "report": report, "phase": self.current_phase}
+                    
+        else:  # CLOSING phase
+            # Just acknowledge the final answer
+            report = self.build_report(self.context.get("role", "backend"), analysis)
+            response_data = {
+                "next_question": "면접이 종료되었습니다. 오늘 면접에 참여해 주셔서 감사합니다.",
+                "reaction": {"type": "complete", "text": "수고하셨습니다!"},
+                "probe_goal": "면접 종료",
+                "requested_evidence": [],
+                "report": report,
+                "phase": self.current_phase
+            }
 
         self.chat_history.append({
             "role": "assistant",
             "type": "question",
-            "content": probe_data["next_question"],
-            "metadata": response_data
+            "content": response_data["next_question"],
+            "metadata": response_data,
+            "phase": self.current_phase
         })
 
         return response_data
 
     def finalize_interview(self) -> Dict[str, Any]:
+        print(f"🏁 [Finalize] chat_history length: {len(self.chat_history)}")
+        print(f"🏁 [Finalize] chat_history roles: {[item.get('role') for item in self.chat_history]}")
+        
         if not self.chat_history:
+            print("❌ [Finalize] No chat history!")
             return {"error": "No interview history found."}
 
         analyses = [item["content"] for item in self.chat_history if item.get("role") == "system" and item.get("type") == "analysis"]
+        print(f"🏁 [Finalize] Found {len(analyses)} analysis records")
+        
         if not analyses:
             return {"error": "No analysis data found."}
 

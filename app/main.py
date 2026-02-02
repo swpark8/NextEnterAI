@@ -88,6 +88,7 @@ class InterviewRequest(BaseModel):
     skills: Optional[Any] = None
     professional_experience: Optional[List[Any]] = None
     project_experience: Optional[List[Any]] = None
+    total_turns: Optional[int] = 5  # ✅ 전체 면접 질문 횟수 추가
     
     class Config:
         extra = "ignore"
@@ -240,8 +241,14 @@ async def interview_next(request: Request):
             body_json = await request.json()
             print(f"🔍 [Interview Request] Raw JSON: {json.dumps(body_json, indent=None, ensure_ascii=False)[:300]}...") 
         except Exception as e:
-            print(f"❌ [Error] Failed to parse JSON: {body_bytes.decode('utf-8')[:200]}")
-            raise HTTPException(status_code=400, detail="Invalid JSON format")
+            # Enhanced error logging for debugging encoding issues
+            print(f"❌ [Error] JSON Parse Failed: {str(e)}")
+            try:
+                # Try to decode with replacement to show what we received
+                print(f"❌ [Error] Body Preview (lossy): {body_bytes.decode('utf-8', errors='replace')[:500]}")
+            except:
+                pass
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
 
         # 2. Convert to Pydantic Model manually
         try:
@@ -298,7 +305,8 @@ async def interview_next(request: Request):
             resume_input,
             interview_request.portfolio,
             interview_request.last_answer,
-            interview_request.portfolio_files
+            interview_request.portfolio_files,
+            total_turns=interview_request.total_turns # ✅ total_turns 전달
         )
 
         response = {
