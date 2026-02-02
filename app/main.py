@@ -88,6 +88,7 @@ class InterviewRequest(BaseModel):
     skills: Optional[Any] = None
     professional_experience: Optional[List[Any]] = None
     project_experience: Optional[List[Any]] = None
+    total_turns: Optional[int] = 5  # ✅ 전체 면접 질문 횟수 추가
     
     class Config:
         extra = "ignore"
@@ -187,7 +188,17 @@ async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
             top_score = 0.0
         else:
             top_score = results[0]['match_score']
-            grade = engine.get_grade(top_score)
+            
+            # [FIX] Java에서 받은 등급 정보 우선 사용
+            evaluation = resume_input.get('evaluation', {})
+            grade = evaluation.get('grade')
+            
+            if grade:
+                print(f"✅ [등급 정보] Java에서 받은 등급 사용: {grade}")
+            else:
+                # 등급 정보가 없으면 자동 계산
+                grade = engine.get_grade(top_score)
+                print(f"⚠️ [등급 정보] 자동 계산된 등급 사용: {grade}")
 
         response = {
             "status": "success",
@@ -230,8 +241,14 @@ async def interview_next(request: Request):
             body_json = await request.json()
             print(f"🔍 [Interview Request] Raw JSON: {json.dumps(body_json, indent=None, ensure_ascii=False)[:300]}...") 
         except Exception as e:
-            print(f"❌ [Error] Failed to parse JSON: {body_bytes.decode('utf-8')[:200]}")
-            raise HTTPException(status_code=400, detail="Invalid JSON format")
+            # Enhanced error logging for debugging encoding issues
+            print(f"❌ [Error] JSON Parse Failed: {str(e)}")
+            try:
+                # Try to decode with replacement to show what we received
+                print(f"❌ [Error] Body Preview (lossy): {body_bytes.decode('utf-8', errors='replace')[:500]}")
+            except:
+                pass
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
 
         # 2. Convert to Pydantic Model manually
         try:
@@ -257,6 +274,21 @@ async def interview_next(request: Request):
                 "professional_experience": interview_request.professional_experience or [],
                 "project_experience": interview_request.project_experience or []
             }
+        # raw_text fallback: 구조화 필드가 비어 있으면 raw_text를 요약용으로 유지 (면접 엔진에서 사용)
+        if final_content and final_content.get("raw_text"):
+            sk = final_content.get("skills")
+            skills_nonempty = (
+                (isinstance(sk, list) and len(sk) > 0)
+                or (isinstance(sk, dict) and (len(sk.get("essential") or []) > 0 or len(sk.get("additional") or []) > 0))
+            )
+            has_structure = (
+                skills_nonempty
+                or (isinstance(final_content.get("education"), list) and len(final_content.get("education", [])) > 0)
+                or (isinstance(final_content.get("professional_experience"), list) and len(final_content.get("professional_experience", [])) > 0)
+                or (isinstance(final_content.get("project_experience"), list) and len(final_content.get("project_experience", [])) > 0)
+            )
+            if not has_structure:
+                final_content["_raw_text_primary"] = True  # 엔진에서 raw_text를 우선 사용
 
         resume_input = {
             "id": interview_request.id,
@@ -273,7 +305,8 @@ async def interview_next(request: Request):
             resume_input,
             interview_request.portfolio,
             interview_request.last_answer,
-            interview_request.portfolio_files
+            interview_request.portfolio_files,
+            total_turns=interview_request.total_turns # ✅ total_turns 전달
         )
 
         response = {
@@ -285,12 +318,49 @@ async def interview_next(request: Request):
         print(f"📤 [Interview Response] Success for resume_id={interview_request.id}")
         return response
 
+
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Interview Engine Error: {str(e)}")
+
+class FinalizeRequest(BaseModel):
+    id: str
+
+@app.post("/api/v1/interview/finalize")
+async def interview_finalize(request: FinalizeRequest):
+    """
+    [POST] /api/v1/interview/finalize
+    면접을 종료하고 최종 평가 리포트를 반환합니다.
+    """
+    try:
+        print(f"🏁 Finalizing interview for ID: {request.id}")
+        
+        # 1. 엔진 인스턴스 조회
+        if request.id not in interview_engines:
+            raise HTTPException(status_code=404, detail="진행 중인 면접 세션이 없습니다.")
+            
+        itv_engine = get_interview_engine(request.id)
+        
+        # 2. 리포트 생성
+        result = itv_engine.finalize_interview()
+        
+        if "error" in result:
+             raise HTTPException(status_code=400, detail=result["error"])
+             
+        # 3. 세션 정리 (선택 사항: 리포트 생성 후 세션을 유지할지 삭제할지 결정. 여기서는 유지)
+        # del interview_engines[request.id] 
+        
+        print(f"✅ Final Report Generated: {result.get('result')}, Score: {result.get('total_score')}")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [Error] Finalize failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Finalize Error: {str(e)}")
 
 @app.get("/")
 async def health_check():

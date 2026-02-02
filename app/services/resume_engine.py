@@ -230,6 +230,42 @@ class MatchingEngine:
         if score >= 58: return "C"
         return "F"
     
+    def _parse_period_to_months(self, period_str: str) -> int:
+        """
+        기간 문자열에서 실제 근무 개월 수 계산.
+        예: "2022.03 ~ 현재", "2021.06 ~ 2021.12", "5년 0개월", "24"
+        """
+        if not period_str or period_str == "0": return 0
+        
+        # 1. 숫자만 있는 경우
+        if period_str.isdigit():
+            return int(period_str)
+            
+        # 2. "N년 M개월" 형식
+        year_match = re.search(r'(\d+)\s*년', period_str)
+        month_match = re.search(r'(\d+)\s*개월', period_str)
+        if year_match or month_match:
+            y = int(year_match.group(1)) if year_match else 0
+            m = int(month_match.group(1)) if month_match else 0
+            return (y * 12) + m
+            
+        # 3. "YYYY.MM ~ ..." 형식
+        dates = re.findall(r'(\d{4})\.(\d{2})', period_str)
+        if dates:
+            start_y, start_m = map(int, dates[0])
+            if "현재" in period_str or "재직" in period_str or len(dates) < 2:
+                import datetime
+                now = datetime.datetime.now()
+                end_y, end_m = now.year, now.month
+            else:
+                end_y, end_m = map(int, dates[1])
+            
+            return (end_y - start_y) * 12 + (end_m - start_m)
+
+        # 4. 정규식 실패 시 숫자 합산 시도
+        nums = re.findall(r'\d+', period_str)
+        return int(nums[0]) if nums else 0
+    
     def _map_score_to_range(self, raw_score: float, target_min: float, target_max: float) -> float:
         """
         [Dynamic Scaling] 현실적인 입력 범위(Raw Score)를 목표 범위로 매핑
@@ -420,10 +456,20 @@ class MatchingEngine:
         if experiences:
             period_str = str(experiences[0].get('period', '0'))
             current_exp_role = experiences[0].get('role', '')
-            nums = re.findall(r'\d+', period_str)
-            actual_months = int(nums[0]) if nums else 0
+            # [FIX] 단순 정규식 대신 고도화된 파서 사용
+            actual_months = self._parse_period_to_months(period_str)
             
         is_relevant_role = self._check_role_relevance(candidate_role, current_exp_role)
+
+        # [DEBUG] F등급 판정 조건 디버깅
+        print(f"\n🔍 [DEBUG - F등급 판정 조건 확인]")
+        print(f"   - candidate_role: {candidate_role}")
+        print(f"   - current_exp_role: {current_exp_role}")
+        print(f"   - period_str: {period_str if experiences else 'N/A'}")
+        print(f"   - actual_months: {actual_months}개월")
+        print(f"   - is_relevant_role: {is_relevant_role}")
+        print(f"   - experiences 개수: {len(experiences)}")
+        print(f"   - resume_text 길이: {len(resume_text)}자 (50자 미만이면 F)")
 
         for idx, comp in enumerate(all_companies):
             # 1. 벡터 점수 정규화
@@ -472,9 +518,24 @@ class MatchingEngine:
                 is_forced_f = True
                 f_reason = "이력서 내용 부족"
 
+            # [FIX] S등급 인재에 대한 유연한 적용
+            # "기술 역량 부족" 등으로 forced_f가 되었더라도, 전체 등급이 S라면 
+            # 59점으로 짓누르는 대신 감점만 적용하여 Top 티어 진입 가능성 열어줌
+            # [FIX] 선제적 인재 구제 로직 (순환 논리 해결)
+            # 아직 등급(Grade)이 정해지기 전이라도, 이력서의 객관적 지표가 훌륭하다면
+            # 기술 불일치 등으로 인한 59점 강제 하락을 막아줌.
+            is_potential_high_talent = (actual_months >= 12 or len(resume_text) >= 800)
+            
             if is_forced_f:
-                # F등급 점수 제한 (최대 59점)
-                final_raw_score = min(final_raw_score, 0.59)
+                # 치명적인 사유(무경력 등)는 여전히 F (59점 제한)
+                critical_reasons = ["실무 경력 없음(신입)", "이력서 내용 부족"]
+                
+                # 경력이 있거나 내용이 충실한 인재는 '기술 불일치/직무 불일치'가 있어도 점수 보존 (20% 감점만)
+                if is_potential_high_talent and f_reason not in critical_reasons:
+                    final_raw_score *= 0.8
+                    print(f"   [Talent Rescue] 선제적 보존: {comp['name']} (사유: {f_reason})")
+                else:
+                    final_raw_score = min(final_raw_score, 0.59)
             else:
                 # C등급 이상 점수 보정 (최소 60점)
                 if final_raw_score < 0.60:
@@ -762,8 +823,13 @@ class MatchingEngine:
         all_comp_data = []
         for t in buckets: all_comp_data.extend(buckets[t])
         
-        # 강제 F등급 여부 확인
-        is_candidate_forced_f = any(c.get('is_forced_f', False) for c in all_comp_data)
+        # 강제 F등급 여부 확인 (이력서 자체의 결격 사유만 체크)
+        # "기술 역량 부족"이나 "직무 불일치"는 해당 기업과의 매칭 문제일 뿐, 지원자의 전체 등급을 깎아서는 안 됨
+        critical_reasons = ["실무 경력 없음(신입)", "이력서 내용 부족"]
+        is_candidate_forced_f = any(
+            c.get('is_forced_f', False) and c.get('f_reason') in critical_reasons 
+            for c in all_comp_data
+        )
         
         resume_evaluation = resume_input.get('evaluation') or {}
         candidate_grade = resume_evaluation.get('grade')
@@ -819,7 +885,8 @@ class MatchingEngine:
             # Dynamic Scaling
             if i < len(self.SCORE_RANGES):
                 min_s, max_s = self.SCORE_RANGES[i]
-                final_score = self._map_score_to_range(res['raw_score'], min_s, max_s)
+                # [FIX] raw_score는 100점 만점이므로 0~1 범위로 변환 후 매핑
+                final_score = self._map_score_to_range(res['raw_score'] / 100.0, min_s, max_s)
             else:
                 final_score = round(res['raw_score'], 1)
 
