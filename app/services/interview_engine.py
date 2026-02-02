@@ -57,15 +57,37 @@ class InterviewEngine:
     def normalize_role(self, target_role: Optional[str]) -> str:
         return target_role or "backend"
 
+    def _resume_summary_for_prompt(self, resume_content: Optional[Dict[str, Any]]) -> str:
+        """구조화 필드가 비어 있으면 raw_text를 우선 사용해 프롬프트용 요약 문자열 반환."""
+        if not resume_content:
+            return "No resume content provided."
+        raw_text = resume_content.get("raw_text") or ""
+        use_raw_primary = resume_content.get("_raw_text_primary") or False
+        sk = resume_content.get("skills")
+        skills_nonempty = (
+            (isinstance(sk, list) and len(sk or []) > 0)
+            or (isinstance(sk, dict) and (len((sk or {}).get("essential") or []) > 0 or len((sk or {}).get("additional") or []) > 0))
+        )
+        has_structure = (
+            skills_nonempty
+            or (isinstance(resume_content.get("education"), list) and len(resume_content.get("education") or []) > 0)
+            or (isinstance(resume_content.get("professional_experience"), list) and len(resume_content.get("professional_experience") or []) > 0)
+            or (isinstance(resume_content.get("project_experience"), list) and len(resume_content.get("project_experience") or []) > 0)
+        )
+        if (use_raw_primary or not has_structure) and raw_text:
+            return f"Resume (raw text):\n\"\"\"\n{raw_text.strip()}\n\"\"\""
+        return json.dumps(resume_content, ensure_ascii=False, indent=2)
+
     def build_seed_question(self, role: str, resume_content: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], portfolio_text: Optional[str] = None) -> Tuple[str, str, List[str]]:
-        # Use LLM to generate a contextual seed question
+        # Use LLM to generate a contextual seed question (raw_text fallback when structure is empty)
+        resume_summary = self._resume_summary_for_prompt(resume_content)
         prompt = f"""
         You are a technical interviewer for a {role} position.
         
         This is the FIRST question of the interview. There is NO prior conversation.
         
         Resume Summary:
-        {json.dumps(resume_content, ensure_ascii=False, indent=2)}
+        {resume_summary}
 
         Portfolio Summary:
         {json.dumps(portfolio, ensure_ascii=False, indent=2)}
@@ -251,7 +273,10 @@ class InterviewEngine:
             
 
             
-            target_role = self.context["resume"].get("classification", {}).get("predicted_role")
+            target_role = (
+                self.context["resume"].get("classification", {}).get("predicted_role")
+                or self.context["resume"].get("target_role")
+            )
             self.context["role"] = self.normalize_role(target_role)
             
             question, probe_goal, requested_evidence = self.build_seed_question(

@@ -187,7 +187,17 @@ async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
             top_score = 0.0
         else:
             top_score = results[0]['match_score']
-            grade = engine.get_grade(top_score)
+            
+            # [FIX] Java에서 받은 등급 정보 우선 사용
+            evaluation = resume_input.get('evaluation', {})
+            grade = evaluation.get('grade')
+            
+            if grade:
+                print(f"✅ [등급 정보] Java에서 받은 등급 사용: {grade}")
+            else:
+                # 등급 정보가 없으면 자동 계산
+                grade = engine.get_grade(top_score)
+                print(f"⚠️ [등급 정보] 자동 계산된 등급 사용: {grade}")
 
         response = {
             "status": "success",
@@ -257,6 +267,21 @@ async def interview_next(request: Request):
                 "professional_experience": interview_request.professional_experience or [],
                 "project_experience": interview_request.project_experience or []
             }
+        # raw_text fallback: 구조화 필드가 비어 있으면 raw_text를 요약용으로 유지 (면접 엔진에서 사용)
+        if final_content and final_content.get("raw_text"):
+            sk = final_content.get("skills")
+            skills_nonempty = (
+                (isinstance(sk, list) and len(sk) > 0)
+                or (isinstance(sk, dict) and (len(sk.get("essential") or []) > 0 or len(sk.get("additional") or []) > 0))
+            )
+            has_structure = (
+                skills_nonempty
+                or (isinstance(final_content.get("education"), list) and len(final_content.get("education", [])) > 0)
+                or (isinstance(final_content.get("professional_experience"), list) and len(final_content.get("professional_experience", [])) > 0)
+                or (isinstance(final_content.get("project_experience"), list) and len(final_content.get("project_experience", [])) > 0)
+            )
+            if not has_structure:
+                final_content["_raw_text_primary"] = True  # 엔진에서 raw_text를 우선 사용
 
         resume_input = {
             "id": interview_request.id,
