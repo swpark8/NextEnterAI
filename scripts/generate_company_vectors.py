@@ -61,6 +61,7 @@ def generate_company_vectors():
     data_dir = base_dir / "app" / "data"
     input_path = data_dir / "company_50_pool.json"
     output_path = data_dir / "company_jd_vectors.pkl"
+    backup_path = data_dir / "company_jd_vectors.bak"
     
     # 입력 파일 확인
     if not input_path.exists():

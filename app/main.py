@@ -90,6 +90,10 @@ class InterviewRequest(BaseModel):
     project_experience: Optional[List[Any]] = None
     total_turns: Optional[int] = 5  # ✅ 전체 면접 질문 횟수 추가
     
+    # [NEW] Stateless Context Support
+    chat_history: Optional[List[Dict[str, Any]]] = None # 이전 대화 내용 (Stateless 지원)
+    difficulty: Optional[str] = "JUNIOR" # JUNIOR | SENIOR
+    
     class Config:
         extra = "ignore"
 
@@ -306,7 +310,9 @@ async def interview_next(request: Request):
             interview_request.portfolio,
             interview_request.last_answer,
             interview_request.portfolio_files,
-            total_turns=interview_request.total_turns # ✅ total_turns 전달
+            total_turns=interview_request.total_turns, # ✅ total_turns 전달
+            chat_history=interview_request.chat_history, # ✅ [NEW] Chat History 전달
+            difficulty=interview_request.difficulty # ✅ [NEW] Difficulty 전달
         )
 
         response = {
@@ -328,6 +334,7 @@ async def interview_next(request: Request):
 
 class FinalizeRequest(BaseModel):
     id: str
+    chat_history: Optional[List[Dict[str, Any]]] = None # [NEW] Stateless 지원
 
 @app.post("/api/v1/interview/finalize")
 async def interview_finalize(request: FinalizeRequest):
@@ -345,7 +352,7 @@ async def interview_finalize(request: FinalizeRequest):
         itv_engine = get_interview_engine(request.id)
         
         # 2. 리포트 생성
-        result = itv_engine.finalize_interview()
+        result = itv_engine.finalize_interview(chat_history=request.chat_history)
         
         if "error" in result:
              raise HTTPException(status_code=400, detail=result["error"])

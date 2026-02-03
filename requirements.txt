@@ -13,3 +13,5 @@ httpx
 pandas
 pytest
 google-genai
+mysql-connector-python
+faker

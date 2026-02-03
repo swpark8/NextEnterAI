@@ -84,13 +84,27 @@ class InterviewEngine:
             return f"Resume (raw text):\n\"\"\"\n{raw_text.strip()}\n\"\"\""
         return json.dumps(resume_content, ensure_ascii=False, indent=2)
 
-    def build_seed_question(self, role: str, resume_content: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], portfolio_text: Optional[str] = None) -> Tuple[str, str, List[str]]:
+    def build_seed_question(self, role: str, resume_content: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], portfolio_text: Optional[str] = None, difficulty: str = "JUNIOR", previous_questions: List[str] = []) -> Tuple[str, str, List[str]]:
         # Use LLM to generate a contextual seed question (raw_text fallback when structure is empty)
         resume_summary = self._resume_summary_for_prompt(resume_content)
+        
+        # Difficulty Adjustment
+        difficulty_instruction = ""
+        if difficulty == "SENIOR":
+            difficulty_instruction = "Assess ARCHITECTURE design, scalability, trade-offs, and leadership skills. Ask complex, high-level technical questions."
+        else:
+            difficulty_instruction = "Assess FUNDAMENTALS, potential, and problem-solving basics. Ask approachable but technically valid questions."
+            
+        previous_context = ""
+        if previous_questions:
+            previous_context = f"AVOID repeating these previously asked questions:\n" + "\n".join([f"- {q}" for q in previous_questions])
+
         prompt = f"""
         You are a technical interviewer for a {role} position.
+        Difficulty Level: {difficulty}
+        Instruction: {difficulty_instruction}
         
-        This is the FIRST question of the interview. There is NO prior conversation.
+        This is a follow-up question during the interview. Build upon prior context if available.
         
         Resume Summary:
         {resume_summary}
@@ -101,18 +115,32 @@ class InterviewEngine:
         Portfolio Parsed Content (PDF/Docx):
         \"\"\"{portfolio_text or "No attached portfolio files."}\"\"\"
 
+        Constraints:
+        {previous_context}
+
         Task:
-        Generate an opening interview question in Korean that:
-        1. References a SPECIFIC project, experience, or skill from the candidate's resume
-        2. Asks them to explain it using the STAR method (Situation, Task, Action, Result)
-        3. Does NOT assume any prior conversation or context
+        Generate an interview question in Korean that explores ONE of these areas (VARY your choice each time):
+        1. **Project Experience**: A specific project from their resume - technical challenges, solutions, outcomes
+        2. **Professional/Career Experience**: Their role at a company, team collaboration, leadership, or organizational contributions
+        3. **Technical Skills**: Deep-dive into a specific technology or skill they claim expertise in
         
-        Example format: "이력서에 [구체적 프로젝트명/경험]이 있는데, 이 프로젝트에서 어떤 상황(Situation)에서 어떤 과제(Task)를 맡으셨고, 어떻게 해결(Action)하셨는지, 그 결과(Result)는 어땠는지 STAR 구조로 설명해 주시겠어요?"
+        Requirements:
+        - Reference a SPECIFIC item from the candidate's resume (project name, company name, or skill)
+        - Ask them to explain using the STAR method (Situation, Task, Action, Result)
+        - Matches the {difficulty} level complexity
+        - For SENIOR: Focus on architecture decisions, leadership, and strategic impact
+        - For JUNIOR: Focus on learning experience, problem-solving approach, and growth
+        - DO NOT ask the same question twice.
+        
+        Example formats:
+        - Project: "이력서에 [프로젝트명] 프로젝트가 있는데, 이 프로젝트에서 맡으신 역할과 기술적 도전을 STAR 구조로 설명해 주세요."
+        - Career: "[회사명]에서 [직책]으로 근무하시면서 가장 큰 성과를 낸 경험을 STAR 방식으로 말씀해 주시겠어요?"
+        - Skill: "이력서에 [기술명]에 능숙하다고 하셨는데, 실제로 어떤 상황에서 이 기술을 활용해 문제를 해결하셨나요?"
         
         Output JSON:
         {{
             "question": "The interview question string in Korean",
-            "probe_goal": "Short description of what you want to verify (e.g., 'Verification of DB Optimization Experience')",
+            "probe_goal": "Short description of what you want to verify",
             "requested_evidence": ["impact metrics", "specific tech stack decision"]
         }}
         """
@@ -126,11 +154,15 @@ class InterviewEngine:
             data.get("requested_evidence", ["구체적 행동", "정량적 성과"])
         )
 
-    def build_intro_question(self, role: str, resume_content: Optional[Dict[str, Any]]) -> Tuple[str, str, List[str]]:
+    def build_intro_question(self, role: str, resume_content: Optional[Dict[str, Any]], difficulty: str = "JUNIOR") -> Tuple[str, str, List[str]]:
         """Generate an introduction question (self-introduction, motivation)."""
         resume_summary = self._resume_summary_for_prompt(resume_content)
+        
+        tone_instruction = "Expected Tone: Encouraging and patient." if difficulty == "JUNIOR" else "Expected Tone: Professional and direct."
+        
         prompt = f"""
         You are a friendly technical interviewer for a {role} position.
+        Difficulty: {difficulty}. {tone_instruction}
         
         This is the VERY FIRST question - an ice-breaker to start the interview.
         
@@ -162,37 +194,32 @@ class InterviewEngine:
             data.get("requested_evidence", ["career motivation", "role fit"])
         )
 
-    def build_closing_question(self, role: str) -> Tuple[str, str, List[str]]:
-        """Generate a closing question (future plans, questions for interviewer)."""
-        prompt = f"""
-        You are a friendly technical interviewer for a {role} position.
+    def build_closing_question(self, role: str, difficulty: str = "JUNIOR") -> Tuple[str, str, List[str]]:
+        """Generate a closing question based on difficulty."""
         
-        The interview is coming to an end. Generate a closing question in Korean.
-        
-        Task:
-        Generate a final question that:
-        1. Asks about their future career goals or plans after joining
-        2. OR asks if they have any questions for the interviewer
-        3. Wraps up the interview in a positive tone
-        
-        Example: "마지막으로, 입사 후 어떤 개발자로 성장하고 싶으신지, 또는 저희에게 궁금한 점이 있으시면 말씀해 주세요."
-        
-        Output JSON:
-        {{
-            "question": "The closing question in Korean",
-            "probe_goal": "성장 비전 및 문화 적합성 확인",
-            "requested_evidence": ["growth mindset", "curiosity"]
-        }}
-        """
-        
-        response_text = self._call_llm(prompt)
-        data = self._parse_json_response(response_text)
-        
-        return (
-            data.get("question", "마지막으로, 입사 후 어떤 개발자로 성장하고 싶으신지, 또는 저희에게 궁금한 점이 있으시면 말씀해 주세요."),
-            data.get("probe_goal", "성장 비전 확인"),
-            data.get("requested_evidence", ["growth mindset", "curiosity"])
-        )
+        if difficulty == "SENIOR":
+            closing_question = (
+                "마지막 질문입니다. 만약 우리 회사의 기술 리더로서 합류하시게 된다면, "
+                "가장 먼저 해결하고 싶은 기술적 과제나 도입하고 싶은 문화가 있으신가요? "
+                "또는 회사에 대해 궁금한 점이 있다면 편하게 질문해 주세요."
+            )
+            return (
+                closing_question,
+                "리더십 및 기술 비전 확인",
+                ["technical vision", "leadership", "strategic thinking"]
+            )
+        else:
+            # JUNIOR/Default
+            closing_question = (
+                "마지막 질문입니다. 우리 회사에 입사하시게 된다면, "
+                "앞으로 어떤 방향으로 성장하고 기여하고 싶으신지, "
+                "또는 저희에게 궁금한 점이 있으시면 말씀해 주세요."
+            )
+            return (
+                closing_question,
+                "성장 비전 및 회사 적합성 확인",
+                ["growth mindset", "company fit", "curiosity"]
+            )
 
     def analyze_answer(self, answer: str) -> Dict[str, Any]:
         prompt = f"""
@@ -223,7 +250,7 @@ class InterviewEngine:
         response_text = self._call_llm(prompt)
         return self._parse_json_response(response_text)
 
-    def build_probe(self, analysis: Dict[str, Any], role: str, last_question: str, last_answer: str) -> Dict[str, Any]:
+    def build_probe(self, analysis: Dict[str, Any], role: str, last_question: str, last_answer: str, difficulty: str = "JUNIOR") -> Dict[str, Any]:
         starr = analysis.get("starr", {})
         
         # Determine strategy based on missing components
@@ -238,8 +265,15 @@ class InterviewEngine:
         else:
             strategy = "paraphrase_and_deepen"
 
+        difficulty_instruction = ""
+        if difficulty == "SENIOR":
+            difficulty_instruction = "Challenge the candidate on their decisions. Ask 'Why did you choose X over Y?' or about trade-offs."
+        else:
+            difficulty_instruction = "Encourage them to explain their thought process clearly."
+
         prompt = f"""
         You are a technical interviewer for a {role} position.
+        Difficulty: {difficulty}. {difficulty_instruction}
         
         Context:
         - Previous Question: "{last_question}"
@@ -322,12 +356,63 @@ class InterviewEngine:
             "evidence_clips": analysis.get("evidence_clips", [])
         }
 
-    def generate_response(self, resume_input: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str], portfolio_files: Optional[List[str]] = None, total_turns: int = 5) -> Dict[str, Any]:
+    def generate_response(self, resume_input: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], last_answer: Optional[str], portfolio_files: Optional[List[str]] = None, total_turns: int = 5, chat_history: Optional[List[Dict[str, Any]]] = None, difficulty: str = "JUNIOR") -> Dict[str, Any]:
+        
+        # [NEW] Stateless Support: Hydrate State from History
+        if chat_history is not None:
+            # Deep copy to avoid reference issues
+            self.chat_history = [item.copy() for item in chat_history]
+            print(f"🔄 Hydrated chat_history from request: {len(self.chat_history)} items")
+            
+            # [FIX] Defensive Parsing for System messages
+            for item in self.chat_history:
+                if item.get("role") == "system" and isinstance(item.get("content"), str):
+                    try:
+                        item["content"] = json.loads(item["content"])
+                    except:
+                        pass
+
+            # Re-determine Phase based on history
+            assistant_questions = [h for h in self.chat_history if h.get("role") == "assistant" and h.get("type") == "question"]
+            question_count = len(assistant_questions)
+            
+            if question_count == 0:
+                self.current_phase = "INTRO"
+            elif question_count >= total_turns - 1:
+                self.current_phase = "CLOSING"
+            else:
+                self.current_phase = "MAIN"
+                
+            # [FIX] Restore current_topic_probe_count
+            # Scan backwards from the end. Count questions until we hit a "seed" question or start of MAIN.
+            # Assuming metadata contains "reaction" type. "transition" or "acknowledge" usually reset the count.
+            # If metadata is missing, assumes 0.
+            probe_c = 0
+            if self.current_phase == "MAIN":
+                for item in reversed(self.chat_history):
+                    if item.get("role") == "assistant" and item.get("type") == "question":
+                        meta = item.get("metadata", {})
+                        if isinstance(meta, str): # Handle string metadata if any
+                             try: meta = json.loads(meta)
+                             except: meta = {}
+                        
+                        reaction_type = meta.get("reaction", {}).get("type", "")
+                        if reaction_type in ["transition", "acknowledge", "welcome"]:
+                            # This was a seed question, so we stop counting here (this is count 0 base)
+                            break
+                        else:
+                            # It was a probe/clarify/reflect
+                            probe_c += 1
+            self.current_topic_probe_count = probe_c
+                
+            print(f"🔄 State Restored: Phase={self.current_phase}, Question Count={question_count}, Probe Count={self.current_topic_probe_count}")
+        
         # 1. Start Interview (INTRO Phase)
         if not self.chat_history:
             self.context["resume"] = resume_input or {}
             self.context["portfolio"] = portfolio or {}
             self.context["total_turns"] = total_turns # ✅ 전체 횟수 저장
+            self.context["difficulty"] = difficulty # ✅ 난이도 저장
             
             # --- Portfolio File Parsing ---
             portfolio_text = ""
@@ -355,9 +440,10 @@ class InterviewEngine:
             self.current_phase = "INTRO"
             question, probe_goal, requested_evidence = self.build_intro_question(
                 self.context["role"], 
-                self.context["resume"].get("resume_content")
+                self.context["resume"].get("resume_content"),
+                difficulty
             )
-            print(f"🎬 [Phase: INTRO] Starting interview with introduction question")
+            print(f"🎬 [Phase: INTRO] Starting interview with introduction question ({difficulty})")
             
             response_data = {
                 "next_question": question,
@@ -382,11 +468,22 @@ class InterviewEngine:
             return response_data
 
         # 2. Continue Interview
-        if last_answer:
+        
+        # [FIX] Prevent Duplicate Answer
+        # Check if the last item in history is ALREADY the same as last_answer
+        is_duplicate = False
+        if self.chat_history and last_answer:
+            last_item = self.chat_history[-1]
+            if last_item.get("role") == "user" and last_item.get("content") == last_answer:
+                is_duplicate = True
+                print("⚠️ [State] last_answer already exists in history. Skipping append.")
+        
+        if last_answer and not is_duplicate:
             self.chat_history.append({
                 "role": "user",
                 "content": last_answer
             })
+
 
         # Get context of previous question
         last_question_item = next((item for item in reversed(self.chat_history) if item["role"] == "assistant"), None)
@@ -399,26 +496,60 @@ class InterviewEngine:
             "type": "analysis",
             "content": analysis
         })
-
-        # Calculate question count (for phase transitions)
-        question_count = len([h for h in self.chat_history if h.get("role") == "assistant" and h.get("type") == "question"])
-        total_turns = self.context.get("total_turns", 5)  # Default 5 turns
         
-        print(f"📊 [Phase: {self.current_phase}] Question #{question_count}, Probe count: {self.current_topic_probe_count}")
+        # Calculate question count
+        assistant_questions = [h for h in self.chat_history if h.get("role") == "assistant" and h.get("type") == "question"]
+        question_count = len(assistant_questions)
+        
+        # Ensure context is loaded if hydrated
+        if "role" not in self.context and resume_input:
+             target_role = (
+                resume_input.get("classification", {}).get("predicted_role")
+                or resume_input.get("target_role")
+            )
+             self.context["role"] = self.normalize_role(target_role)
+             self.context["resume"] = resume_input
+             self.context["portfolio"] = portfolio
+             self.context["difficulty"] = difficulty
+
+
+        print(f"📊 [Phase: {self.current_phase}] Question #{question_count}, Probe count: {self.current_topic_probe_count}, Difficulty: {difficulty}")
 
         # [NEW] Phase Transition Logic
+        # Case 1: INTRO -> MAIN Transition
+        # If we are in INTRO phase limit (question_count=0), current_phase is INTRO.
+        # If we hydrated and found 1 question (The intro), current_phase became MAIN.
+        # BUT we must treat "Question #1 Answered" as the trigger for the First SEED Question.
+        
         if self.current_phase == "INTRO":
+             # Legacy path if hydration didn't switch it
+             self.current_phase = "MAIN"
+             # ...
+             
+        # [FIX] Implicit Transition check:
+        # If we are in MAIN phase, but question_count is exactly 1 (Intro asked),
+        # meaning we just finished Intro. We MUST generate the first Seed question.
+        # AND we should NOT probe the Intro answer.
+        
+        is_intro_transition = (question_count == 1)
+        
+        if self.current_phase == "INTRO" or is_intro_transition:
             # After intro answer, move to MAIN phase
             self.current_phase = "MAIN"
             self.current_topic_probe_count = 0
-            print(f"➡️ Transitioning to MAIN phase")
+            print(f"➡️ Transitioning to MAIN phase (Intro Finished)")
             
             # Generate first project question
+            # [FIX] Pass previous questions to prevent repeats
+            previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
+            
             question, probe_goal, requested_evidence = self.build_seed_question(
                 self.context["role"], 
                 self.context["resume"].get("resume_content"), 
                 self.context["portfolio"],
-                self.context.get("portfolio_parsed_text")
+                self.context.get("portfolio_parsed_text"),
+                difficulty,
+                previous_qs # Pass history
             )
             
             response_data = {
@@ -430,25 +561,48 @@ class InterviewEngine:
                 "phase": self.current_phase
             }
             
+        elif self.current_phase == "COMPLETED" or question_count >= total_turns - 1:
+            self.current_phase = "COMPLETED"
+            # Return Goodbye Message
+            report = self.build_report(self.context.get("role", "backend"), analysis)
+            response_data = {
+                "next_question": "면접이 종료되었습니다. 수고하셨습니다. [결과 보기] 버튼을 눌러 피드백을 확인해주세요.",
+                "reaction": {"type": "complete", "text": "모든 면접 과정이 끝났습니다."},
+                "probe_goal": "최종 종료",
+                "requested_evidence": [],
+                "report": report,
+                "phase": "COMPLETED",
+                "analysis_result": analysis
+            }
+            self.chat_history.append({
+                "role": "assistant",
+                "type": "question",
+                "content": response_data["next_question"],
+                "metadata": response_data,
+                "phase": "COMPLETED"
+            })
+            return response_data
+
+        elif self.current_phase == "CLOSING" or question_count == total_turns - 2:
+            self.current_phase = "CLOSING"
+            # Return Closing Question
+            question, probe_goal, requested_evidence = self.build_closing_question(self.context["role"], difficulty)
+            response_data = {
+                "next_question": question,
+                "reaction": {"type": "wrap_up", "text": "이제 마지막 질문을 드리겠습니다."},
+                "probe_goal": probe_goal,
+                "requested_evidence": requested_evidence,
+                "report": self.build_report(self.context.get("role", "backend"), analysis),
+                "phase": "CLOSING",
+                "analysis_result": analysis
+            }
+            
         elif self.current_phase == "MAIN":
-            # Check if we should move to CLOSING phase
-            if question_count >= total_turns - 1:  # Reserve last turn for closing
-                self.current_phase = "CLOSING"
-                print(f"➡️ Transitioning to CLOSING phase")
-                
-                question, probe_goal, requested_evidence = self.build_closing_question(self.context["role"])
-                
-                response_data = {
-                    "next_question": question,
-                    "reaction": {"type": "wrap_up", "text": "좋은 답변 감사합니다. 면접이 거의 마무리되어 갑니다."},
-                    "probe_goal": probe_goal,
-                    "requested_evidence": requested_evidence,
-                    "report": self.build_report(self.context.get("role", "backend"), analysis),
-                    "phase": self.current_phase
-                }
-            else:
-                # [NEW] Probe count limiting - prevent infinite follow-ups
-                self.current_topic_probe_count += 1
+            # MAIN Phase Logic
+            # [NEW] Probe count limiting - prevent infinite follow-ups
+            self.current_topic_probe_count += 1
+            
+            # (Fall through to existing logic below)
                 
                 starr = analysis.get("starr", {})
                 starr_filled = sum(1 for v in starr.values() if v)
@@ -459,11 +613,16 @@ class InterviewEngine:
                     self.current_topic_probe_count = 0
                     
                     # Generate new topic question
+                    # [FIX] Pass previous questions
+                    previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
+
                     question, probe_goal, requested_evidence = self.build_seed_question(
                         self.context["role"], 
                         self.context["resume"].get("resume_content"), 
                         self.context["portfolio"],
-                        self.context.get("portfolio_parsed_text")
+                        self.context.get("portfolio_parsed_text"),
+                        difficulty,
+                        previous_qs # Pass history
                     )
                     
                     response_data = {
@@ -474,23 +633,29 @@ class InterviewEngine:
                         "report": self.build_report(self.context.get("role", "backend"), analysis),
                         "phase": self.current_phase
                     }
-                else:
-                    # Continue probing current topic
-                    probe_data = self.build_probe(analysis, self.context.get("role", "backend"), last_question_text, last_answer or "")
-                    report = self.build_report(self.context.get("role", "backend"), analysis)
-                    response_data = {**probe_data, "report": report, "phase": self.current_phase}
-                    
-        else:  # CLOSING phase
-            # Just acknowledge the final answer
-            report = self.build_report(self.context.get("role", "backend"), analysis)
-            response_data = {
-                "next_question": "면접이 종료되었습니다. 오늘 면접에 참여해 주셔서 감사합니다.",
-                "reaction": {"type": "complete", "text": "수고하셨습니다!"},
+
+        elif self.current_phase == "CLOSING":
+             # Already in closing phase, but backend requested another turn?
+             # Just return a polite closing message.
+             report = self.build_report(self.context.get("role", "backend"), analysis)
+             response_data = {
+                "next_question": "면접이 종료되었습니다. 수고하셨습니다.",
+                "reaction": {"type": "complete", "text": "면접이 종료되었습니다."},
                 "probe_goal": "면접 종료",
                 "requested_evidence": [],
                 "report": report,
                 "phase": self.current_phase
             }
+
+        response_data = {
+            "next_question": response_data["next_question"],
+            "reaction": response_data["reaction"],
+            "probe_goal": response_data.get("probe_goal"),
+            "requested_evidence": response_data.get("requested_evidence"),
+            "report": response_data.get("report"),
+            "phase": self.current_phase,
+            "analysis_result": analysis # ✅ [NEW] Return raw analysis for stateless storage
+        }
 
         self.chat_history.append({
             "role": "assistant",
@@ -502,7 +667,12 @@ class InterviewEngine:
 
         return response_data
 
-    def finalize_interview(self) -> Dict[str, Any]:
+    def finalize_interview(self, chat_history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        # [NEW] Stateless Support
+        if chat_history is not None:
+             self.chat_history = [item.copy() for item in chat_history]
+             print(f"🔄 Hydrated chat_history for Finalize: {len(self.chat_history)} items")
+             
         print(f"🏁 [Finalize] chat_history length: {len(self.chat_history)}")
         print(f"🏁 [Finalize] chat_history roles: {[item.get('role') for item in self.chat_history]}")
         
@@ -510,7 +680,18 @@ class InterviewEngine:
             print("❌ [Finalize] No chat history!")
             return {"error": "No interview history found."}
 
-        analyses = [item["content"] for item in self.chat_history if item.get("role") == "system" and item.get("type") == "analysis"]
+        analyses = []
+        for item in self.chat_history:
+            if item.get("role") == "system" and item.get("type") == "analysis":
+                content = item.get("content")
+                if isinstance(content, str):
+                    try:
+                        content = json.loads(content)
+                    except:
+                        continue
+                if isinstance(content, dict):
+                    analyses.append(content)
+
         print(f"🏁 [Finalize] Found {len(analyses)} analysis records")
         
         if not analyses:
