@@ -326,6 +326,58 @@ class MatchingEngine:
         # 모든 파트를 공백으로 구분하여 하나의 텍스트로 병합
         return " ".join([p for p in text_parts if p]).strip()
 
+    def _infer_role_from_text(self, text: str) -> str:
+        """
+        이력서 텍스트에서 직무 키워드를 찾아 역할을 추론합니다.
+        지원 6개 직무: AI/LLM, Frontend, Backend, Fullstack, UI/UX, PM
+        """
+        text_lower = text.lower()
+        
+        # 1. PM (Product Manager)
+        pm_keywords = [
+            'product manager', 'pm', '기획', 'product owner', 'po', 
+            'agile', 'scrum', 'jira', 'roadmap', 'kpi', 'strategy', '와이어프레임'
+        ]
+        if any(keyword in text_lower for keyword in pm_keywords):
+            return "PM (Product Manager)"
+
+        # 2. UI/UX Designer
+        design_keywords = [
+            'ui/ux', 'product designer', 'figma', 'sketch', 'adobe xd', 
+            'photoshop', 'illustrator', 'zeplin', 'wireframe', 'prototype', 
+            'user experience', 'user interface', 'design system'
+        ]
+        if any(keyword in text_lower for keyword in design_keywords):
+            return "UI/UX Designer"
+
+        # 3. AI/LLM Engineer
+        ai_keywords = [
+            'llm', 'nlp', 'pytorch', 'tensorflow', 'deep learning', 
+            'machine learning', 'huggingface', 'langchain', 
+            'ai engineer', 'data scientist', 'transformer', 'rag', 'opencv'
+        ]
+        if any(keyword in text_lower for keyword in ai_keywords):
+            return "AI/LLM Engineer"
+            
+        # 4. Fullstack Developer
+        fullstack_keywords = [
+            'fullstack', 'full-stack', 'full stack', 'mern', 'mean stack'
+        ]
+        if any(keyword in text_lower for keyword in fullstack_keywords):
+            return "Fullstack Developer"
+
+        # 5. Frontend Developer
+        fe_keywords = [
+            'react', 'vue', 'angular', 'next.js', 'typescript', 
+            'frontend', 'front-end', 'css3', 'html5', 'redux', 'zustand', 
+            'tailwind', 'bootstrap'
+        ]
+        if any(keyword in text_lower for keyword in fe_keywords):
+            return "Frontend Developer"
+
+        # 6. Backend Developer (Default & Keywords)
+        return "Backend Developer"
+
     # --------------------------------------
     # 내부 함수: 핵심 로직 (Logic)
     # --------------------------------------
@@ -807,7 +859,12 @@ class MatchingEngine:
         
         # 2. 직무 파악
         classification = resume_input.get('classification', {})
-        role = classification.get('predicted_role') or resume_input.get('target_role', 'backend')
+        role = classification.get('predicted_role') or resume_input.get('target_role')
+        
+        # [FIX] 직무 미지정 시 이력서 텍스트 기반 추론 (AI/LLM 등 오분류 방지)
+        if not role:
+            role = self._infer_role_from_text(resume_text)
+            print(f"✅ Inferred Role: {role}")
 
         # 3. 벡터 임베딩 및 유사도 계산
         if self.model:

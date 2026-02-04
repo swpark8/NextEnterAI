@@ -566,7 +566,7 @@ class InterviewEngine:
             # Return Goodbye Message
             report = self.build_report(self.context.get("role", "backend"), analysis)
             response_data = {
-                "next_question": "면접이 종료되었습니다. 수고하셨습니다. [결과 보기] 버튼을 눌러 피드백을 확인해주세요.",
+                "next_question": "면접이 종료되었습니다. 수고하셨습니다. (잠시 후 결과 화면으로 이동합니다)",
                 "reaction": {"type": "complete", "text": "모든 면접 과정이 끝났습니다."},
                 "probe_goal": "최종 종료",
                 "requested_evidence": [],
@@ -604,53 +604,53 @@ class InterviewEngine:
             
             # (Fall through to existing logic below)
                 
-                starr = analysis.get("starr", {})
-                starr_filled = sum(1 for v in starr.values() if v)
+            starr = analysis.get("starr", {})
+            starr_filled = sum(1 for v in starr.values() if v)
+            
+            # Move to next topic if: probe limit reached OR STARR is sufficiently complete (3+ elements)
+            if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 3:
+                print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
+                self.current_topic_probe_count = 0
                 
-                # Move to next topic if: probe limit reached OR STARR is sufficiently complete (3+ elements)
-                if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 3:
-                     print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
-                     self.current_topic_probe_count = 0
-                     
-                     # Generate new topic question
-                     # [FIX] Pass previous questions
-                     previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
+                # Generate new topic question
+                # [FIX] Pass previous questions
+                previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
 
-                     question, probe_goal, requested_evidence = self.build_seed_question(
-                         self.context["role"], 
-                         self.context["resume"].get("resume_content"), 
-                         self.context["portfolio"],
-                         self.context.get("portfolio_parsed_text"),
-                         difficulty,
-                         previous_qs # Pass history
-                     )
-                     
-                     response_data = {
-                         "next_question": question,
-                         "reaction": {"type": "transition", "text": "좋습니다. 다른 경험에 대해서도 여쭤볼게요."},
-                         "probe_goal": probe_goal,
-                         "requested_evidence": requested_evidence,
-                         "report": self.build_report(self.context.get("role", "backend"), analysis),
-                         "phase": self.current_phase
-                     }
-                else:
-                    # Continue probing same topic
-                    response_data_dict = self.build_probe(
-                        analysis, 
-                        self.context.get("role", "backend"), 
-                        last_question_text, 
-                        last_answer,
-                        difficulty
-                    )
-                    
-                    response_data = {
-                        "next_question": response_data_dict["next_question"],
-                        "reaction": response_data_dict["reaction"],
-                        "probe_goal": response_data_dict["probe_goal"],
-                        "requested_evidence": response_data_dict["requested_evidence"],
-                        "report": self.build_report(self.context.get("role", "backend"), analysis),
-                        "phase": self.current_phase
-                    }
+                question, probe_goal, requested_evidence = self.build_seed_question(
+                    self.context["role"], 
+                    self.context["resume"].get("resume_content"), 
+                    self.context["portfolio"],
+                    self.context.get("portfolio_parsed_text"),
+                    difficulty,
+                    previous_qs # Pass history
+                )
+                
+                response_data = {
+                    "next_question": question,
+                    "reaction": {"type": "transition", "text": "좋습니다. 다른 경험에 대해서도 여쭤볼게요."},
+                    "probe_goal": probe_goal,
+                    "requested_evidence": requested_evidence,
+                    "report": self.build_report(self.context.get("role", "backend"), analysis),
+                    "phase": self.current_phase
+                }
+            else:
+                # Continue probing same topic
+                response_data_dict = self.build_probe(
+                    analysis, 
+                    self.context.get("role", "backend"), 
+                    last_question_text, 
+                    last_answer,
+                    difficulty
+                )
+                
+                response_data = {
+                    "next_question": response_data_dict["next_question"],
+                    "reaction": response_data_dict["reaction"],
+                    "probe_goal": response_data_dict["probe_goal"],
+                    "requested_evidence": response_data_dict["requested_evidence"],
+                    "report": self.build_report(self.context.get("role", "backend"), analysis),
+                    "phase": self.current_phase
+                }
 
         elif self.current_phase == "CLOSING":
              # Already in closing phase, but backend requested another turn?

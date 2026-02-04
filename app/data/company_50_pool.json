@@ -3,1002 +3,693 @@
     "name": "네이버 (Naver)",
     "tier": "Top",
     "employee_count": "4000+",
-    "industry": "포털/플랫폼",
+    "industry": "Portal/AI",
     "location": "분당",
     "tech_stack": [
       "Java",
       "Spring Boot",
-      "Kubernetes",
       "Python",
+      "Kubernetes",
+      "AI/ML",
+      "Node.js",
+      "React",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Figma",
+      "Jira",
+      "Notion",
       "PyTorch",
-      "HasperCLOVA",
-      "AI/ML"
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "카카오 (Kakao)",
     "tier": "Top",
     "employee_count": "3000+",
-    "industry": "모바일/플랫폼",
-    "location": "판교",
+    "industry": "Platform/Backend",
+    "location": "제주/판교",
     "tech_stack": [
       "Kotlin",
       "Spring",
       "JPA",
       "Python",
-      "KoGPT",
-      "TensorFlow"
+      "TensorFlow",
+      "Java",
+      "Spring Boot",
+      "Node.js",
+      "React",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "쿠팡 (Coupang)",
     "tier": "Top",
-    "employee_count": "5000+ (개발직군)",
-    "industry": "이커머스",
-    "location": "서울(잠실)",
+    "employee_count": "5000+",
+    "industry": "Commerce/Logistics",
+    "location": "송파/강남",
     "tech_stack": [
       "Java",
       "Spring",
       "AWS",
+      "MSA",
+      "Data Engineering",
+      "Spring Boot",
       "Python",
-      "Recommendation System",
-      "Data Engineering"
+      "Node.js",
+      "React",
+      "TypeScript",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "비바리퍼블리카 (Toss)",
     "tier": "Top",
-    "employee_count": "1000+",
-    "industry": "핀테크",
-    "location": "서울(강남)",
+    "employee_count": "1500+",
+    "industry": "Fintech/Finance",
+    "location": "강남",
     "tech_stack": [
       "Kotlin",
       "Spring",
       "Node.js",
       "React",
-      "Python",
-      "Data Science"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "우아한형제들 (배달의민족)",
-    "tier": "Top",
-    "employee_count": "1500+",
-    "industry": "O2O/푸드테크",
-    "location": "서울(송파)",
-    "tech_stack": [
+      "Next.js",
       "Java",
-      "Spring",
-      "JPA",
+      "Spring Boot",
       "Python",
-      "MLOps",
-      "Robot AI"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "라인플러스 (LINE)",
-    "tier": "Top",
-    "employee_count": "1500+",
-    "industry": "글로벌 메신저",
-    "location": "분당",
-    "tech_stack": [
-      "Kotlin",
-      "Java",
-      "Redis",
-      "Python",
-      "NLP",
-      "Large Language Model"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "SK텔레콤 (SKT)",
-    "tier": "Top",
-    "employee_count": "5000+",
-    "industry": "통신/AI",
-    "location": "서울(을지로)",
-    "tech_stack": [
-      "Python",
+      "TypeScript",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
       "PyTorch",
-      "AWS",
-      "React"
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "CJ올리브네트웍스",
-    "tier": "Top",
-    "employee_count": "1500+",
-    "industry": "SI/이커머스",
-    "location": "서울(용산)",
-    "tech_stack": [
-      "Java",
-      "Spring",
-      "Oracle",
-      "Vue.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "당근 (Karrot)",
-    "tier": "Mid",
-    "employee_count": "400+",
-    "industry": "중고거래/커뮤니티",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Go",
-      "Ruby",
-      "TypeScript",
-      "React"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "직방 (Zigbang)",
-    "tier": "Mid",
-    "employee_count": "300+",
-    "industry": "프롭테크",
-    "location": "서울(원격중심)",
-    "tech_stack": [
-      "Node.js",
-      "TypeScript",
-      "React",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "버킷플레이스 (오늘의집)",
-    "tier": "Mid",
-    "employee_count": "400+",
-    "industry": "이커머스/인테리어",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Java",
-      "Spring",
-      "React",
-      "Kotlin"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "야놀자 (Yanolja)",
-    "tier": "Mid",
-    "employee_count": "800+",
-    "industry": "여행/레저",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Java",
-      "Spring",
-      "AWS",
-      "Kafka"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "무신사 (Musinsa)",
-    "tier": "Mid",
-    "employee_count": "900+",
-    "industry": "이커머스/패션",
-    "location": "서울(성수)",
+    "tier": "Top",
+    "employee_count": "1200+",
+    "industry": "Fashion Commerce",
+    "location": "성수",
     "tech_stack": [
       "Java",
       "Spring",
       "PHP",
-      "Vue.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "컬리 (Kurly)",
-    "tier": "Mid",
-    "employee_count": "900+",
-    "industry": "이커머스/푸드",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Java",
-      "Spring",
+      "Vue.js",
+      "AWS",
+      "Spring Boot",
       "Python",
-      "AWS"
+      "Node.js",
+      "React",
+      "TypeScript",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "두나무 (Upbit)",
     "tier": "Mid",
     "employee_count": "500+",
-    "industry": "핀테크/블록체인",
-    "location": "서울(강남)",
+    "industry": "Blockchain/Fintech",
+    "location": "강남",
     "tech_stack": [
       "Java",
       "Spring",
-      "Android",
-      "iOS"
+      "Blockchain",
+      "React",
+      "Mobile",
+      "Spring Boot",
+      "Python",
+      "Node.js",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "쏘카 (Socar)",
     "tier": "Mid",
-    "employee_count": "400+",
-    "industry": "모빌리티",
-    "location": "서울(성수)",
+    "employee_count": "450+",
+    "industry": "Mobility",
+    "location": "성수",
     "tech_stack": [
       "Kotlin",
       "Spring",
       "React",
-      "Terraform"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "베스핀글로벌",
-    "tier": "Mid",
-    "employee_count": "900+",
-    "industry": "클라우드(MSP)",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Go",
-      "Python",
-      "React",
-      "Kubernetes"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "메가존클라우드",
-    "tier": "Mid",
-    "employee_count": "900+",
-    "industry": "클라우드(MSP)",
-    "location": "서울(강남)",
-    "tech_stack": [
+      "Terraform",
+      "Data Science",
       "Java",
-      "Spring",
-      "AWS",
-      "Vue.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "뤼이드 (Riiid)",
-    "tier": "Mid",
-    "employee_count": "200+",
-    "industry": "에듀테크/AI",
-    "location": "서울(강남)",
-    "tech_stack": [
+      "Spring Boot",
       "Python",
       "Node.js",
-      "React",
-      "TensorFlow"
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "원티드랩",
-    "tier": "Mid",
-    "employee_count": "200+",
-    "industry": "HR테크",
-    "location": "서울(잠실)",
-    "tech_stack": [
-      "Python",
-      "Flask",
-      "React",
-      "Next.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "에이블리 (Ably)",
     "tier": "Mid",
     "employee_count": "300+",
-    "industry": "이커머스/패션",
-    "location": "서울(강남)",
+    "industry": "Commerce/Recommendation",
+    "location": "강남",
     "tech_stack": [
       "Python",
       "Django",
       "React Native",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "리디 (Ridibooks)",
-    "tier": "Mid",
-    "employee_count": "300+",
-    "industry": "콘텐츠",
-    "location": "서울(강남)",
-    "tech_stack": [
+      "AWS",
+      "MLOps",
+      "Java",
+      "Spring Boot",
       "Node.js",
-      "Go",
       "React",
-      "Kotlin"
+      "TypeScript",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
-    "name": "힐링페이퍼 (강남언니)",
+    "name": "지그재그 (Zigzag)",
     "tier": "Mid",
-    "employee_count": "150+",
-    "industry": "헬스케어",
-    "location": "서울(강남)",
+    "employee_count": "350+",
+    "industry": "Commerce",
+    "location": "강남",
     "tech_stack": [
       "Node.js",
-      "Kotlin",
-      "Spring",
-      "GraphQL"
+      "TypeScript",
+      "AWS",
+      "React",
+      "GraphQL",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
+    ]
+  },
+  {
+    "name": "몰로코 (Moloco)",
+    "tier": "Mid",
+    "employee_count": "600+",
+    "industry": "AdTech/ML",
+    "location": "강남",
+    "tech_stack": [
+      "Go",
+      "Python",
+      "BigQuery",
+      "TensorFlow",
+      "GCP",
+      "Java",
+      "Spring Boot",
+      "Node.js",
+      "React",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
+    ],
+    "target_roles": [
+      "backend",
+      "frontend",
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "센드버드 (Sendbird)",
     "tier": "Mid",
     "employee_count": "300+",
-    "industry": "SaaS/Chat API",
-    "location": "서울(강남)",
+    "industry": "Chat Solutions/SaaS",
+    "location": "강남",
     "tech_stack": [
       "Python",
       "Django",
+      "AWS",
       "React",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "몰로코 (Moloco)",
-    "tier": "Mid",
-    "employee_count": "400+",
-    "industry": "애드테크/AI",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Go",
-      "Python",
-      "BigTable",
-      "TensorFlow"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "가비아 (Gabia)",
-    "tier": "Mid",
-    "employee_count": "350+",
-    "industry": "클라우드/호스팅",
-    "location": "판교",
-    "tech_stack": [
-      "PHP",
-      "Python",
-      "C++",
-      "Docker"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "카페24 (Cafe24)",
-    "tier": "Mid",
-    "employee_count": "900+",
-    "industry": "이커머스 플랫폼",
-    "location": "서울(신대방)",
-    "tech_stack": [
-      "PHP",
-      "Vue.js",
-      "React",
-      "MySQL"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "와디즈 (Wadiz)",
-    "tier": "Mid",
-    "employee_count": "200+",
-    "industry": "크라우드펀딩",
-    "location": "판교",
-    "tech_stack": [
+      "WebSocket",
       "Java",
       "Spring Boot",
-      "React",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "클래스101",
-    "tier": "Mid",
-    "employee_count": "200+",
-    "industry": "에듀테크",
-    "location": "서울(강남)",
-    "tech_stack": [
       "Node.js",
-      "React",
-      "GraphQL",
-      "AWS"
+      "TypeScript",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
-    "name": "드라마앤컴퍼니 (리멤버)",
+    "name": "루닛 (Lunit)",
     "tier": "Mid",
-    "employee_count": "150+",
-    "industry": "HR/비즈니스",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Ruby on Rails",
-      "React",
-      "AWS",
-      "Elasticsearch"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "버드뷰 (화해)",
-    "tier": "Mid",
-    "employee_count": "150+",
-    "industry": "뷰티/플랫폼",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Kotlin",
-      "Spring",
-      "React",
-      "MySQL"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "크몽 (Kmong)",
-    "tier": "Mid",
-    "employee_count": "150+",
-    "industry": "프리랜서 마켓",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "PHP",
-      "Laravel",
-      "React",
-      "Next.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "fullstack",
-      "ai/llm engineer",
-      "pm",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "스푼라디오",
-    "tier": "Mid",
-    "employee_count": "100+",
-    "industry": "오디오 플랫폼",
-    "location": "서울(강남)",
+    "employee_count": "300+",
+    "industry": "Medical AI",
+    "location": "강남",
     "tech_stack": [
       "Python",
-      "Django",
+      "PyTorch",
+      "Docker",
+      "Computer Vision",
+      "Medical Imaging",
+      "Java",
+      "Spring Boot",
       "Node.js",
-      "React"
+      "React",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
       "fullstack",
-      "ai/llm engineer",
       "pm",
-      "ui/ux designer"
+      "ai/llm",
+      "ui/ux"
+    ]
+  },
+  {
+    "name": "매스프레소 (Qanda)",
+    "tier": "Mid",
+    "employee_count": "400+",
+    "industry": "EdTech",
+    "location": "강남",
+    "tech_stack": [
+      "React",
+      "TypeScript",
+      "Node.js",
+      "Math OCR",
+      "AWS",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
+    ],
+    "target_roles": [
+      "backend",
+      "frontend",
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
+    ]
+  },
+  {
+    "name": "리디 (RIDI)",
+    "tier": "Mid",
+    "employee_count": "450+",
+    "industry": "Content Platform",
+    "location": "강남",
+    "tech_stack": [
+      "Go",
+      "PHP",
+      "React",
+      "Kubernetes",
+      "Kotlin",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Node.js",
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
+    ],
+    "target_roles": [
+      "backend",
+      "frontend",
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "두들린 (Greeting)",
     "tier": "Low",
-    "employee_count": "50~80",
-    "industry": "HR테크/B2B",
-    "location": "서울(강남)",
+    "employee_count": "80+",
+    "industry": "HR SaaS",
+    "location": "강남",
     "tech_stack": [
       "NestJS",
       "TypeScript",
       "React",
-      "Next.js"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend",
-      "pm"
-    ]
-  },
-  {
-    "name": "레몬베이스",
-    "tier": "Low",
-    "employee_count": "60~90",
-    "industry": "HR테크/SaaS",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Python",
-      "Django",
-      "React",
-      "TypeScript"
-    ],
-    "target_roles": [
-      "fullstack",
-      "frontend",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "쿼타랩 (QuotaBook)",
-    "tier": "Low",
-    "employee_count": "40~70",
-    "industry": "핀테크/B2B",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Ruby on Rails",
-      "React",
-      "TypeScript",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "fullstack"
-    ]
-  },
-  {
-    "name": "라이너 (Liner)",
-    "tier": "Low",
-    "employee_count": "40~70",
-    "industry": "AI/정보검색",
-    "location": "서울(마포)",
-    "tech_stack": [
-      "Python",
-      "FastAPI",
-      "React",
-      "GCP"
-    ],
-    "target_roles": [
-      "AI/LLM",
-      "fullstack",
-      "backend"
-    ]
-  },
-  {
-    "name": "업스테이지",
-    "tier": "Low",
-    "employee_count": "90~120",
-    "industry": "AI/LLM",
-    "location": "판교",
-    "tech_stack": [
-      "Python",
-      "PyTorch",
-      "FastAPI",
-      "MLOps"
-    ],
-    "target_roles": [
-      "AI/LLM",
-      "backend"
-    ]
-  },
-  {
-    "name": "스캐터랩 (이루다)",
-    "tier": "Low",
-    "employee_count": "70~99",
-    "industry": "AI/챗봇",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Python",
-      "Kotlin",
-      "Spring",
-      "React"
-    ],
-    "target_roles": [
-      "AI/LLM",
-      "backend",
-      "fullstack"
-    ]
-  },
-  {
-    "name": "셀렉트스타",
-    "tier": "Low",
-    "employee_count": "50~90",
-    "industry": "AI데이터",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Python",
-      "Django",
-      "React",
-      "Node.js"
-    ],
-    "target_roles": [
-      "backend",
-      "pm"
-    ]
-  },
-  {
-    "name": "자란다",
-    "tier": "Low",
-    "employee_count": "80~100",
-    "industry": "에듀테크",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Node.js",
-      "NestJS",
-      "React",
-      "AWS"
-    ],
-    "target_roles": [
-      "frontend",
-      "backend"
-    ]
-  },
-  {
-    "name": "마플코퍼레이션",
-    "tier": "Low",
-    "employee_count": "70~99",
-    "industry": "이커머스/POD",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Node.js",
-      "React",
-      "Three.js",
-      "Canvas"
-    ],
-    "target_roles": [
-      "frontend",
-      "fullstack",
-      "ui/ux designer"
-    ]
-  },
-  {
-    "name": "집토스",
-    "tier": "Low",
-    "employee_count": "40~80",
-    "industry": "프롭테크",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Python",
-      "Django",
-      "Vue.js",
-      "Flutter"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend"
-    ]
-  },
-  {
-    "name": "로앤컴퍼니 (로톡)",
-    "tier": "Low",
-    "employee_count": "80~99",
-    "industry": "리걸테크",
-    "location": "서울(강남)",
-    "tech_stack": [
-      "Python",
-      "Django",
-      "React",
-      "AWS"
-    ],
-    "target_roles": [
-      "backend",
-      "frontend"
-    ]
-  },
-  {
-    "name": "와드 (캐치테이블)",
-    "tier": "Low",
-    "employee_count": "80~100",
-    "industry": "푸드테크/예약",
-    "location": "분당",
-    "tech_stack": [
+      "Next.js",
+      "SaaS",
       "Java",
       "Spring Boot",
-      "React",
-      "Kotlin"
+      "Python",
+      "Node.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
-      "ui/ux designer"
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
-    "name": "모두싸인",
+    "name": "팀스파르타 (TeamSparta)",
     "tier": "Low",
-    "employee_count": "80~100",
-    "industry": "SaaS/전자계약",
-    "location": "서울(강남)",
+    "employee_count": "150+",
+    "industry": "EdTech",
+    "location": "강남",
     "tech_stack": [
-      "Ruby on Rails",
+      "Node.js",
+      "Express",
+      "MongoDB",
+      "AWS Lambda",
       "React",
+      "Java",
+      "Spring Boot",
+      "Python",
       "TypeScript",
-      "AWS"
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
+      "backend",
+      "frontend",
       "fullstack",
-      "frontend"
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
     "name": "플렉스 (flex)",
     "tier": "Low",
-    "employee_count": "80~99",
+    "employee_count": "100+",
     "industry": "HR SaaS",
-    "location": "서울(강남)",
+    "location": "강남",
     "tech_stack": [
-      "Node.js",
-      "NestJS",
       "Vue.js",
-      "AWS"
+      "Nuxt.js",
+      "TypeScript",
+      "Design System",
+      "AWS",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Node.js",
+      "React",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
       "frontend",
-      "ui/ux designer"
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
-    "name": "인프랩 (인프런)",
+    "name": "인프랩 (Inflearn)",
     "tier": "Low",
-    "employee_count": "60~90",
-    "industry": "에듀테크",
+    "employee_count": "120+",
+    "industry": "Knowledge Sharing",
     "location": "판교",
     "tech_stack": [
       "Node.js",
       "React",
-      "TypeScript",
-      "NestJS"
-    ],
-    "target_roles": [
-      "fullstack",
-      "backend"
-    ]
-  },
-  {
-    "name": "펫프렌즈",
-    "tier": "Low",
-    "employee_count": "90~120",
-    "industry": "반려동물/커머스",
-    "location": "서울(강남)",
-    "tech_stack": [
+      "Next.js",
+      "PostgreSQL",
+      "Google Analytics",
       "Java",
-      "Spring",
+      "Spring Boot",
+      "Python",
+      "TypeScript",
       "AWS",
-      "Vue.js"
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
       "backend",
-      "frontend"
+      "frontend",
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   },
   {
-    "name": "팀스파르타",
+    "name": "스푼라디오 (Spoon)",
     "tier": "Low",
-    "employee_count": "80~100",
-    "industry": "에듀테크/SI",
-    "location": "서울(강남)",
+    "employee_count": "200+",
+    "industry": "Audio Streaming",
+    "location": "강남",
     "tech_stack": [
+      "Python",
+      "Django",
+      "WebRTC",
+      "Redis",
+      "Audio Processing",
+      "Java",
+      "Spring Boot",
       "Node.js",
       "React",
-      "Flutter",
-      "Next.js"
+      "TypeScript",
+      "Next.js",
+      "AWS",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
     ],
     "target_roles": [
+      "backend",
+      "frontend",
       "fullstack",
-      "pm"
+      "pm",
+      "ai/llm",
+      "ui/ux"
+    ]
+  },
+  {
+    "name": "왓챠 (Watcha)",
+    "tier": "Low",
+    "employee_count": "250+",
+    "industry": "OTT/Recommendation",
+    "location": "강남",
+    "tech_stack": [
+      "Ruby on Rails",
+      "Go",
+      "React",
+      "AWS",
+      "Recommendation",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Node.js",
+      "TypeScript",
+      "Next.js",
+      "Docker",
+      "Kubernetes",
+      "Figma",
+      "Jira",
+      "Notion",
+      "PyTorch",
+      "Git"
+    ],
+    "target_roles": [
+      "backend",
+      "frontend",
+      "fullstack",
+      "pm",
+      "ai/llm",
+      "ui/ux"
     ]
   }
 ]
