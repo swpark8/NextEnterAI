@@ -609,27 +609,45 @@ class InterviewEngine:
                 
                 # Move to next topic if: probe limit reached OR STARR is sufficiently complete (3+ elements)
                 if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 3:
-                    print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
-                    self.current_topic_probe_count = 0
-                    
-                    # Generate new topic question
-                    # [FIX] Pass previous questions
-                    previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
+                     print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
+                     self.current_topic_probe_count = 0
+                     
+                     # Generate new topic question
+                     # [FIX] Pass previous questions
+                     previous_qs = [item["content"] for item in self.chat_history if item.get("role") == "assistant" and item.get("type") == "question"]
 
-                    question, probe_goal, requested_evidence = self.build_seed_question(
-                        self.context["role"], 
-                        self.context["resume"].get("resume_content"), 
-                        self.context["portfolio"],
-                        self.context.get("portfolio_parsed_text"),
-                        difficulty,
-                        previous_qs # Pass history
+                     question, probe_goal, requested_evidence = self.build_seed_question(
+                         self.context["role"], 
+                         self.context["resume"].get("resume_content"), 
+                         self.context["portfolio"],
+                         self.context.get("portfolio_parsed_text"),
+                         difficulty,
+                         previous_qs # Pass history
+                     )
+                     
+                     response_data = {
+                         "next_question": question,
+                         "reaction": {"type": "transition", "text": "좋습니다. 다른 경험에 대해서도 여쭤볼게요."},
+                         "probe_goal": probe_goal,
+                         "requested_evidence": requested_evidence,
+                         "report": self.build_report(self.context.get("role", "backend"), analysis),
+                         "phase": self.current_phase
+                     }
+                else:
+                    # Continue probing same topic
+                    response_data_dict = self.build_probe(
+                        analysis, 
+                        self.context.get("role", "backend"), 
+                        last_question_text, 
+                        last_answer,
+                        difficulty
                     )
                     
                     response_data = {
-                        "next_question": question,
-                        "reaction": {"type": "transition", "text": "좋습니다. 다른 경험에 대해서도 여쭤볼게요."},
-                        "probe_goal": probe_goal,
-                        "requested_evidence": requested_evidence,
+                        "next_question": response_data_dict["next_question"],
+                        "reaction": response_data_dict["reaction"],
+                        "probe_goal": response_data_dict["probe_goal"],
+                        "requested_evidence": response_data_dict["requested_evidence"],
                         "report": self.build_report(self.context.get("role", "backend"), analysis),
                         "phase": self.current_phase
                     }
