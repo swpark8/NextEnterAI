@@ -919,20 +919,14 @@ class MatchingEngine:
                 if comp['metadata']['company_name'] not in used_companies:
                     selected = comp
                     break
-            
-            # Fallback (해당 티어에 없으면 다른 티어 검색)
-            if not selected:
-                order = ["Top", "Mid", "Low"] if required_tier == "Top" else ["Mid", "Low", "Top"]
-                for tier in order:
-                    for comp in buckets.get(tier, []):
-                        if comp['metadata']['company_name'] not in used_companies:
-                            selected = comp
-                            break
-                    if selected: break
-            
+
+            # [FIX] Fallback 제거 - TIER_RULES 엄격 적용
+            # 해당 티어에 기업이 없으면 스킵 (다른 티어에서 가져오지 않음)
             if selected:
                 used_companies.add(selected['metadata']['company_name'])
                 final_selection.append(selected)
+            else:
+                print(f"⚠️ [TIER] '{required_tier}' 티어에 추천 가능한 기업 없음 - 스킵")
 
         # 6. 점수 매핑 및 포맷팅
         formatted_results = [] # 응답용 (Slim)

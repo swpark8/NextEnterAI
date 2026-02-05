@@ -233,6 +233,11 @@ async def recommend_resume_alias(resume_request: ResumeRequest):
     print("🔄 Redirecting /recommend to /analyze...")
     return await analyze_resume(resume_request)
 
+# ==========================================
+# Interview Routes (Dual Path Support)
+# ==========================================
+
+@app.post("/interview/next", response_model=InterviewResponse)
 @app.post("/api/v1/interview/next", response_model=InterviewResponse)
 async def interview_next(request: Request):
     try:
@@ -337,18 +342,35 @@ class FinalizeRequest(BaseModel):
     id: str
     chat_history: Optional[List[Dict[str, Any]]] = None # [NEW] Stateless 지원
 
+@app.post("/interview/finalize")
 @app.post("/api/v1/interview/finalize")
 async def interview_finalize(request: FinalizeRequest):
     """
-    [POST] /api/v1/interview/finalize
+    [POST] /interview/finalize or /api/v1/interview/finalize
+    면접을 종료하고 최종 평가 리포트를 반환합니다.
+    """
+    return await interview_complete_handler(request)
+
+@app.post("/interview/complete")
+@app.post("/api/v1/interview/complete")
+async def interview_complete_handler(request: FinalizeRequest):
+    """
+    [POST] /api/v1/interview/complete (Alias for finalize to fix 404)
     면접을 종료하고 최종 평가 리포트를 반환합니다.
     """
     try:
-        print(f"🏁 Finalizing interview for ID: {request.id}")
+        print(f"🏁 [New Route] Finalizing interview for ID: {request.id}")
         
         # 1. 엔진 인스턴스 조회
         if request.id not in interview_engines:
-            raise HTTPException(status_code=404, detail="진행 중인 면접 세션이 없습니다.")
+            # 세션이 없을 경우 에러 대신 기본값 반환 (방어 로직)
+            print(f"⚠️ Session not found for ID: {request.id}. Returning empty report with F grade.")
+            return {
+                "total_score": 0.0,
+                "result": "Disqualified",
+                "stats": {},
+                "error": "Session Expired or Not Found"
+            }
             
         itv_engine = get_interview_engine(request.id)
         
@@ -356,23 +378,30 @@ async def interview_finalize(request: FinalizeRequest):
         result = itv_engine.finalize_interview(chat_history=request.chat_history)
         
         if "error" in result:
-             raise HTTPException(status_code=400, detail=result["error"])
+             # 에러가 있어도 200 OK로 응답하되 에러 메시지 포함 (Client에서 처리)
+             print(f"⚠️ Report Generation Warning: {result['error']}")
              
-        # 3. 세션 정리 (선택 사항: 리포트 생성 후 세션을 유지할지 삭제할지 결정. 여기서는 유지)
-        # del interview_engines[request.id] 
+        # 3. 세션 정리 (선택 사항)
+        if request.id in interview_engines:
+            print(f"🧹 Clearing session for ID: {request.id}")
+            del interview_engines[request.id] 
         
         print(f"✅ Final Report Generated: {result.get('result')}, Score: {result.get('total_score')}")
         return result
         
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"❌ [Error] Finalize failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Finalize Error: {str(e)}")
+        print(f"❌ [Error] Complete failed: {e}")
+        # 500 에러 대신 200 OK로 에러 정보 반환 (클라이언트 멈춤 방지)
+        return {
+            "total_score": 0.0,
+            "result": "Error",
+            "stats": {},
+            "error": str(e)
+        }
 
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "NextEnter AI Server is running properly (Hybrid Mode)."}
 
-if __name__ == "__main__":
+if __name__ == "__main__": # Reload Triggered
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
