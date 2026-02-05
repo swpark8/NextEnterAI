@@ -119,7 +119,7 @@ class AnalysisResponse(BaseModel):
     recommendations: List[Any]
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
-async def analyze_resume(request: Union[Request, ResumeRequest]):
+async def analyze_resume(request: Request):
     """
     이력서 분석 및 AI 기업 매칭. Request(직접 호출) 또는 ResumeRequest(/recommend 경유) 모두 처리.
     """
