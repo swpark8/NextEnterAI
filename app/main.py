@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 # [핵심] 우리가 만든 엔진 임포트
 # (파일명이 resume_engine.py 라고 가정)
@@ -70,6 +70,10 @@ class ResumeRequest(BaseModel):
     professional_experience: Optional[List[Any]] = None
     project_experience: Optional[List[Any]] = None
     
+    # 4. Java 백엔드 연동 (등급/분류)
+    classification: Optional[Dict[str, Any]] = None
+    evaluation: Optional[Dict[str, Any]] = None
+    
     # 그 외 어떤 필드가 들어와도 에러내지 않음
     class Config:
         extra = "ignore" 
@@ -115,25 +119,22 @@ class AnalysisResponse(BaseModel):
     recommendations: List[Any]
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
-async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
+async def analyze_resume(request: Union[Request, ResumeRequest]):
     """
-    디버깅용: 실제 들어오는 body를 먼저 확인
+    이력서 분석 및 AI 기업 매칭. Request(직접 호출) 또는 ResumeRequest(/recommend 경유) 모두 처리.
     """
     try:
-        # 1. Raw body 확인
-        raw_body = await request.body()
-        print(f"🔍 [Raw Body] {raw_body.decode('utf-8')}")
-        
-        # 2. JSON 파싱
-        body_dict = await request.json()
-        print(f"🔍 [Parsed JSON] {json.dumps(body_dict, indent=2, ensure_ascii=False)}")
-        
-        # 3. Pydantic 모델로 변환
-        resume_request = ResumeRequest(**body_dict)
-        print(f"🔍 [Pydantic Model] {resume_request}")
-        
-        # 4. 기존 로직 실행
-        request_obj = resume_request  # 이름 변경
+        # 1. 인자 분기: Request면 body 파싱, ResumeRequest면 그대로 사용
+        if isinstance(request, Request):
+            raw_body = await request.body()
+            print(f"🔍 [Raw Body] {raw_body.decode('utf-8')}")
+            body_dict = await request.json()
+            print(f"🔍 [Parsed JSON] {json.dumps(body_dict, indent=2, ensure_ascii=False)}")
+            request_obj = ResumeRequest(**body_dict)
+            print(f"🔍 [Pydantic Model] {request_obj}")
+        else:
+            request_obj = request  # /recommend에서 넘어온 ResumeRequest
+            print(f"🔍 [Parsed] ResumeRequest (from /recommend)")
 
         # ✅ [New] 파일 파싱 로직 추가 (이력서 파일이 있으면 텍스트 추출)
         if request_obj.file_path:
@@ -175,8 +176,8 @@ async def analyze_resume(request: Request):  # ← 일단 raw Request로 받기
             "id": request_obj.id,
             "target_role": final_target_role,
             "resume_content": final_content,
-            "classification": {},
-            "evaluation": {}
+            "classification": (request_obj.classification or {}),
+            "evaluation": (request_obj.evaluation or {})
         }
         
         print(f"🔍 Analyzing for role: {final_target_role}")
