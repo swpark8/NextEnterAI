@@ -848,22 +848,29 @@ class MatchingEngine:
     # ==========================================
     # 메인 메소드 (FastAPI 호환)
     # ==========================================
-    def recommend(self, resume_input: dict) -> Tuple[List[Dict], str]:
-        """FastAPI 라우터 호환용 메인 메소드"""
+    def recommend(self, resume_input: dict) -> Tuple[List[Dict], str, Dict, Dict]:
+        """
+        FastAPI 라우터 호환용 메인 메소드
+        Returns: (recommendations, report, classification, evaluation)
+        """
         # [방어 코드] 기업 데이터 확인
         if not self.companies or self.company_vectors is None:
-            return [], "시스템 에러: 기업 데이터(Vector DB)가 로드되지 않았습니다."
+            empty_classification = {"predicted_role": None, "confidence": 0.0, "evidence": []}
+            empty_evaluation = {"grade": "F", "score": 0.0, "criteria": {}}
+            return [], "시스템 에러: 기업 데이터(Vector DB)가 로드되지 않았습니다.", empty_classification, empty_evaluation
 
         # 1. 이력서 텍스트 변환
         resume_text = self._convert_resume_to_text(resume_input)
-        
+
         # 2. 직무 파악
         classification = resume_input.get('classification', {})
         role = classification.get('predicted_role') or resume_input.get('target_role')
-        
+        role_inferred = False
+
         # [FIX] 직무 미지정 시 이력서 텍스트 기반 추론 (AI/LLM 등 오분류 방지)
         if not role:
             role = self._infer_role_from_text(resume_text)
+            role_inferred = True
             print(f"✅ Inferred Role: {role}")
 
         # 3. 벡터 임베딩 및 유사도 계산
@@ -913,6 +920,12 @@ class MatchingEngine:
         final_selection = []
         used_companies = set()
 
+        # [DEBUG] TIER_RULES 적용 로그
+        print(f"\n📊 [TIER_RULES 적용]")
+        print(f"   - 지원자 등급: {candidate_grade}")
+        print(f"   - 적용 규칙: {target_slots}")
+        print(f"   - 버킷 현황: Top={len(buckets.get('Top',[]))}개, Mid={len(buckets.get('Mid',[]))}개, Low={len(buckets.get('Low',[]))}개")
+
         for required_tier in target_slots:
             selected = None
             for comp in buckets.get(required_tier, []):
@@ -925,8 +938,9 @@ class MatchingEngine:
             if selected:
                 used_companies.add(selected['metadata']['company_name'])
                 final_selection.append(selected)
+                print(f"   ✅ {required_tier} 티어 → {selected['metadata']['company_name']} 선정")
             else:
-                print(f"⚠️ [TIER] '{required_tier}' 티어에 추천 가능한 기업 없음 - 스킵")
+                print(f"   ⚠️ [TIER] '{required_tier}' 티어에 추천 가능한 기업 없음 - 스킵")
 
         # 6. 점수 매핑 및 포맷팅
         formatted_results = [] # 응답용 (Slim)
@@ -990,11 +1004,63 @@ class MatchingEngine:
         # 7. AI 피드백 생성 (Full Data 사용!)
         report = self.generate_xai_feedback(resume_input, full_data_results)
 
+        # 8. Classification 객체 생성 (직무 분류 결과)
+        content = resume_input.get('resume_content', {})
+        skills_data = content.get('skills', {})
+        skill_evidence = []
+        if isinstance(skills_data, dict):
+            skill_evidence = skills_data.get('essential', [])[:5]
+        elif isinstance(skills_data, list):
+            skill_evidence = skills_data[:5]
+
+        # 신뢰도 계산: 기술 스택 + 경력 + 프로젝트 기반
+        confidence_factors = []
+        if skill_evidence:
+            confidence_factors.append(0.3)
+        if content.get('professional_experience'):
+            confidence_factors.append(0.4)
+        if content.get('project_experience'):
+            confidence_factors.append(0.2)
+        if content.get('education'):
+            confidence_factors.append(0.1)
+
+        role_confidence = sum(confidence_factors) if confidence_factors else 0.1
+
+        final_classification = {
+            "predicted_role": role,
+            "confidence": round(role_confidence, 2),
+            "evidence": skill_evidence,
+            "method": "inferred" if role_inferred else "provided"
+        }
+
+        # 9. Evaluation 객체 생성 (등급 평가 결과)
+        # 상위 3개 기업 점수 평균으로 최종 점수 산정
+        if full_data_results:
+            top_scores = [r['match_score'] for r in full_data_results[:3]]
+            avg_score = sum(top_scores) / len(top_scores)
+        else:
+            avg_score = 0.0
+
+        final_evaluation = {
+            "grade": candidate_grade,
+            "score": round(avg_score, 1),
+            "criteria": {
+                "technical_match": round(full_data_results[0].get('keyword_raw', 0) * 100, 1) if full_data_results else 0.0,
+                "semantic_relevance": round(full_data_results[0].get('vector_norm', 0) * 100, 1) if full_data_results else 0.0,
+                "experience_quality": len(content.get('professional_experience', [])) * 20,  # 경력당 20점
+                "project_depth": len(content.get('project_experience', [])) * 15  # 프로젝트당 15점
+            },
+            "tier_applied": target_slots  # 적용된 TIER_RULES
+        }
+
+        print(f"\n📋 [Classification] {final_classification}")
+        print(f"📋 [Evaluation] grade={candidate_grade}, score={avg_score:.1f}")
+
         # [수정] formatted_results 대신 full_data_results를 반환합니다.
         # 이유: main.py가 tech_stack, reason 등을 필수 필드로 요구하기 때문에
         # formatted_results를 보내면 500 에러가 발생합니다.
         # 화면에도 Tech Stack을 보여주려면 Full Data가 필요합니다.
-        return full_data_results, report
+        return full_data_results, report, final_classification, final_evaluation
 
 if __name__ == "__main__":
     engine = MatchingEngine()

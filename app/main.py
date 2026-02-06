@@ -117,6 +117,8 @@ class AnalysisResponse(BaseModel):
     score: float
     ai_feedback: Any
     recommendations: List[Any]
+    classification: Optional[Dict[str, Any]] = None  # 직무 분류 결과
+    evaluation: Optional[Dict[str, Any]] = None      # 등급 평가 결과
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
 async def analyze_resume(request: Request):
@@ -183,27 +185,23 @@ async def analyze_resume(request: Request):
         print(f"🔍 Analyzing for role: {final_target_role}")
 
         if engine:
-            results, report = engine.recommend(resume_input)
+            results, report, ai_classification, ai_evaluation = engine.recommend(resume_input)
         else:
             raise Exception("Engine not initialized")
-        
+
         if not results:
             print("⚠️ No recommendations generated.")
             grade = "F"
             top_score = 0.0
+            # 빈 결과에도 기본 classification/evaluation 제공
+            ai_classification = {"predicted_role": final_target_role, "confidence": 0.0, "evidence": []}
+            ai_evaluation = {"grade": "F", "score": 0.0, "criteria": {}}
         else:
             top_score = results[0]['match_score']
-            
-            # [FIX] Java에서 받은 등급 정보 우선 사용
-            evaluation = resume_input.get('evaluation', {})
-            grade = evaluation.get('grade')
-            
-            if grade:
-                print(f"✅ [등급 정보] Java에서 받은 등급 사용: {grade}")
-            else:
-                # 등급 정보가 없으면 자동 계산
-                grade = engine.get_grade(top_score)
-                print(f"⚠️ [등급 정보] 자동 계산된 등급 사용: {grade}")
+
+            # [FIX] AI 엔진에서 생성한 등급 정보 사용 (Java 전달값보다 정확)
+            grade = ai_evaluation.get('grade', 'F')
+            print(f"✅ [등급 정보] AI 엔진 생성 등급 사용: {grade}")
 
         response = {
             "status": "success",
@@ -212,7 +210,9 @@ async def analyze_resume(request: Request):
             "grade": grade,
             "score": top_score,
             "ai_feedback": report,
-            "recommendations": results
+            "recommendations": results,
+            "classification": ai_classification,  # 직무 분류 결과 추가
+            "evaluation": ai_evaluation           # 등급 평가 결과 추가
         }
         
         print(f"📤 [Response] Success! Grade: {grade}, Recs: {len(results)}")
