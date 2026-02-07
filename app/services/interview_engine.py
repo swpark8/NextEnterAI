@@ -87,31 +87,52 @@ class InterviewEngine:
     def build_seed_question(self, role: str, resume_content: Optional[Dict[str, Any]], portfolio: Optional[Dict[str, Any]], portfolio_text: Optional[str] = None, difficulty: str = "JUNIOR", previous_questions: List[str] = []) -> Tuple[str, str, List[str]]:
         # Use LLM to generate a contextual seed question (raw_text fallback when structure is empty)
         resume_summary = self._resume_summary_for_prompt(resume_content)
-        
+
         # Difficulty Adjustment
         difficulty_instruction = ""
         if difficulty == "SENIOR":
-            difficulty_instruction = "Assess ARCHITECTURE design, scalability, trade-offs, and leadership skills. Ask complex, high-level technical questions."
+            difficulty_instruction = "Assess practical decision-making and real-world problem-solving. Ask about specific technical challenges they encountered and how they resolved them. Focus on WHY they chose certain approaches, not abstract architecture theory."
         else:
-            difficulty_instruction = "Assess FUNDAMENTALS, potential, and problem-solving basics. Ask approachable but technically valid questions."
-            
+            difficulty_instruction = "Assess their hands-on experience and what they learned. Ask about what they actually did in projects and what was challenging. Keep it conversational - one focused question, not multiple sub-questions packed together."
+
         previous_context = ""
         if previous_questions:
             previous_context = f"AVOID repeating these previously asked questions:\n" + "\n".join([f"- {q}" for q in previous_questions])
+
+        # 최근 Q&A 대화 맥락 구성 (새 질문이 이전 답변과 연결되도록)
+        conversation_context = ""
+        recent_pairs = []
+        for item in reversed(self.chat_history):
+            if item.get("role") == "user":
+                answer = item.get("content", "")
+            elif item.get("role") == "assistant" and item.get("type") == "question":
+                question = item.get("content", "")
+                if answer:
+                    recent_pairs.append({"q": question, "a": answer})
+                    answer = ""
+            if len(recent_pairs) >= 3:
+                break
+        if recent_pairs:
+            recent_pairs.reverse()
+            conversation_context = "Recent Interview Conversation (use this to connect your next question naturally):\n"
+            for i, pair in enumerate(recent_pairs, 1):
+                conversation_context += f"  Q{i}: {pair['q']}\n  A{i}: {pair['a'][:200]}\n"
 
         prompt = f"""
         You are a technical interviewer for a {role} position.
         Difficulty Level: {difficulty}
         Instruction: {difficulty_instruction}
-        
+
         This is a follow-up question during the interview. Build upon prior context if available.
-        
+
+        {conversation_context}
+
         Resume Summary:
         {resume_summary}
 
         Portfolio Summary:
         {json.dumps(portfolio, ensure_ascii=False, indent=2)}
-        
+
         Portfolio Parsed Content (PDF/Docx):
         \"\"\"{portfolio_text or "No attached portfolio files."}\"\"\"
 
@@ -120,24 +141,31 @@ class InterviewEngine:
 
         Task:
         Generate an interview question in Korean that explores ONE of these areas (VARY your choice each time):
-        1. **Project Experience**: A specific project from their resume - technical challenges, solutions, outcomes
-        2. **Professional/Career Experience**: Their role at a company, team collaboration, leadership, or organizational contributions
-        3. **Technical Skills**: Deep-dive into a specific technology or skill they claim expertise in
-        
+        1. **Project Experience**: A specific project from their resume - what they did and what was difficult
+        2. **Professional/Career Experience**: Their role at a company, what they contributed
+        3. **Technical Skills**: A specific technology they used - how and why they used it
+
         Requirements:
+        - **IMPORTANT: If the candidate mentioned something interesting in their previous answers (a technology, a challenge, a project detail), naturally reference it in your next question to show you are listening.**
         - Reference a SPECIFIC item from the candidate's resume (project name, company name, or skill)
-        - Ask them to explain with specific situation, their role, actions taken, and outcomes
+        - **Ask ONE focused question only. Do NOT bundle multiple sub-questions (e.g. "역할과 도전과 결과를 말씀해주세요" is too much). Pick ONE angle.**
         - **CRITICAL: NEVER use the words "STAR", "STARR", "스타", or "STAR 방식" in your question. Just ask naturally in Korean without mentioning any methodology names.**
         - Matches the {difficulty} level complexity
-        - For SENIOR: Focus on architecture decisions, leadership, and strategic impact
-        - For JUNIOR: Focus on learning experience, problem-solving approach, and growth
+        - For SENIOR: Ask about why they made specific technical decisions and what trade-offs they considered
+        - For JUNIOR: Ask about what they did, what was hard, or what they learned - pick just one
         - DO NOT ask the same question twice.
-        
-        Example formats:
-        - Project: "이력서에 [프로젝트명] 프로젝트가 있는데, 이 프로젝트에서 맡으신 역할과 어떤 기술적 도전이 있었는지, 그리고 결과는 어땠는지 구체적으로 말씀해 주세요."
-        - Career: "[회사명]에서 [직책]으로 근무하시면서 가장 큰 성과를 낸 경험이 있으시다면, 당시 상황과 본인이 기여한 부분을 상세히 설명해 주시겠어요?"
-        - Skill: "이력서에 [기술명]에 능숙하다고 하셨는데, 실제로 어떤 상황에서 이 기술을 활용해 문제를 해결하셨나요?"
-        
+
+        Example formats by difficulty:
+        JUNIOR examples (focused, single-angle):
+        - "이력서에 [프로젝트명]이 있는데, 이 프로젝트에서 가장 어려웠던 부분이 뭐였나요?"
+        - "[기술명]을 사용하셨다고 하셨는데, 어떤 프로젝트에서 사용하셨고 왜 그 기술을 선택하셨나요?"
+        - "아까 [이전 답변 키워드] 말씀하셨는데, [회사명]에서도 비슷한 경험이 있으셨나요?"
+
+        SENIOR examples (decision-focused):
+        - "[프로젝트명]에서 기술 스택을 선택할 때 어떤 대안들을 고려하셨고, 최종적으로 왜 그 방향으로 결정하셨나요?"
+        - "아까 [이전 답변 키워드] 관련해서 말씀하셨는데, [회사명]에서 비슷한 문제를 다르게 접근한 경험이 있으신가요?"
+        - "[기술명] 도입 과정에서 팀 내 반대 의견이나 기술적 리스크는 어떻게 관리하셨나요?"
+
         Output JSON:
         {{
             "question": "The interview question string in Korean",
@@ -368,6 +396,11 @@ class InterviewEngine:
         ## 구체적 증거 추출:
         기술명, 수치, 기간, 성과 지표 등 구체적인 정보 추출
 
+        ## 태도/톤 분석 (면접 예절):
+        - "professional": 존댓말 사용, 정중한 어투 ("~합니다", "~했습니다", "~주셨는데요")
+        - "casual": 반말 섞임, 비격식적이지만 무례하지는 않음 ("~했어요", "~인데", "~거든요")
+        - "rude": 반말, 무례한 표현, 비꼬는 말투, 불성실한 태도 ("몰라요", "그냥요", 비속어, 빈정거림, 과도한 ㅋㅋ/ㅎㅎ)
+
         ## Output JSON (반드시 이 형식으로):
         {{
             "starr": {{
@@ -379,7 +412,8 @@ class InterviewEngine:
             }},
             "contribution": "clear" 또는 "mixed" 또는 "unclear",
             "evidence_clips": ["증거1", "증거2"],
-            "answer_quality": "excellent" 또는 "good" 또는 "fair" 또는 "poor"
+            "answer_quality": "excellent" 또는 "good" 또는 "fair" 또는 "poor",
+            "tone": "professional" 또는 "casual" 또는 "rude"
         }}
         """
 
@@ -697,6 +731,31 @@ class InterviewEngine:
             matches = re.findall(pattern, answer)
             evidence_clips.extend(matches)
 
+        # ========================================
+        # 태도/톤 분석 (면접 예절)
+        # ========================================
+        tone = "professional"
+
+        rude_patterns = [
+            r"몰라", r"모르겠고", r"알아서", r"상관없", r"귀찮", r"싫어", r"됐고", r"그냥요",
+            r"왜요", r"뭔데", r"어쩌라고", r"그래서요", r"없는데요", r"할말없",
+            r"씨발", r"시발", r"ㅅㅂ", r"개같", r"존나", r"ㅈㄴ", r"미친", r"ㅁㅊ",
+            r"ㅋㅋㅋㅋ", r"ㅎㅎㅎㅎ", r"ㄹㅇ", r"ㅇㅇ", r"ㄴㄴ", r"ㅇㅋ",
+        ]
+        casual_patterns = [
+            r"했어$", r"했지$", r"했음$", r"인데$", r"거든$", r"잖아",
+            r"~임$", r"했다$", r"이다$", r"한다$", r"된다$",
+            r"해봤는데", r"했는데", r"인거 같", r"같은데",
+        ]
+
+        has_rude = any(re.search(p, answer) for p in rude_patterns)
+        has_casual = any(re.search(p, answer) for p in casual_patterns)
+
+        if has_rude:
+            tone = "rude"
+        elif has_casual:
+            tone = "casual"
+
         return {
             "starr": {
                 "situation": has_situation,
@@ -706,17 +765,18 @@ class InterviewEngine:
                 "reflection": has_reflection
             },
             "contribution": contribution,
-            "evidence_clips": evidence_clips[:10]  # 최대 10개
+            "evidence_clips": evidence_clips[:10],  # 최대 10개
+            "tone": tone
         }
 
     def _determine_reaction_type(self, analysis: Dict[str, Any]) -> str:
         """
-        답변 품질에 따른 면접관 반응 타입 결정
+        답변 품질 + 태도에 따른 면접관 반응 타입 결정
+        - impressed: STARR 5개 완벽, 증거 풍부, 태도 양호
         - satisfied: STARR 4개 이상, 기여도 명확
-        - impressed: STARR 5개 완벽, 증거 풍부
         - good: STARR 3개, 괜찮은 수준
         - neutral: STARR 2개
-        - concerned: STARR 1개 이하, 기여도 불명확
+        - concerned: STARR 1개 이하, 기여도 불명확, 또는 무례한 태도
         - unsatisfied: 거의 내용 없음
         """
         starr = analysis.get("starr", {})
@@ -724,18 +784,29 @@ class InterviewEngine:
         contribution = analysis.get("contribution", "unclear")
         evidence = analysis.get("evidence_clips", [])
         quality = analysis.get("answer_quality", "fair")
+        tone = analysis.get("tone", "professional")
 
-        # 품질 기반 판단
+        # 내용 기반 판단
         if quality == "excellent" or (filled >= 4 and contribution == "clear" and len(evidence) >= 2):
-            return "impressed"
+            reaction = "impressed"
         elif quality == "good" or (filled >= 3 and contribution in ["clear", "mixed"]):
-            return "satisfied"
+            reaction = "satisfied"
         elif filled >= 2:
-            return "good" if contribution != "unclear" else "neutral"
+            reaction = "good" if contribution != "unclear" else "neutral"
         elif filled == 1:
-            return "concerned"
+            reaction = "concerned"
         else:
-            return "unsatisfied"
+            reaction = "unsatisfied"
+
+        # 태도가 무례하면 반응 하향 (내용이 아무리 좋아도 impressed/satisfied 불가)
+        if tone == "rude":
+            downgrade = {"impressed": "neutral", "satisfied": "neutral", "good": "concerned"}
+            reaction = downgrade.get(reaction, reaction)
+        elif tone == "casual":
+            downgrade = {"impressed": "satisfied"}
+            reaction = downgrade.get(reaction, reaction)
+
+        return reaction
 
     def build_probe(self, analysis: Dict[str, Any], role: str, last_question: str, last_answer: str, difficulty: str = "JUNIOR") -> Dict[str, Any]:
         starr = analysis.get("starr", {})
@@ -757,9 +828,9 @@ class InterviewEngine:
 
         difficulty_instruction = ""
         if difficulty == "SENIOR":
-            difficulty_instruction = "Challenge the candidate on their decisions. Ask 'Why did you choose X over Y?' or about trade-offs."
+            difficulty_instruction = "Ask about the reasoning behind their decisions. Keep it to one focused follow-up, not multiple questions."
         else:
-            difficulty_instruction = "Encourage them to explain their thought process clearly."
+            difficulty_instruction = "Gently ask them to elaborate on one specific part of their answer. Keep it encouraging and simple."
 
         prompt = f"""
         You are a technical interviewer for a {role} position.
@@ -1101,8 +1172,8 @@ class InterviewEngine:
             starr = analysis.get("starr", {})
             starr_filled = sum(1 for v in starr.values() if v)
             
-            # Move to next topic if: probe limit reached OR STARR is sufficiently complete (3+ elements)
-            if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 3:
+            # Move to next topic if: probe limit reached OR STARR is sufficiently complete (4+ elements)
+            if self.current_topic_probe_count >= self.max_probes_per_topic or starr_filled >= 4:
                 print(f"🔄 Moving to next topic (probes: {self.current_topic_probe_count}, STARR filled: {starr_filled})")
                 self.current_topic_probe_count = 0
                 

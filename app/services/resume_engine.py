@@ -249,17 +249,17 @@ class MatchingEngine:
             m = int(month_match.group(1)) if month_match else 0
             return (y * 12) + m
             
-        # 3. "YYYY.MM ~ ..." 형식
-        dates = re.findall(r'(\d{4})\.(\d{2})', period_str)
-        if dates:
-            start_y, start_m = map(int, dates[0])
+        # 3. "YYYY.MM ~ ..." 또는 "YYYY-MM-DD ~ ..." 형식
+        dates = re.findall(r'(\d{4})[.\-/](\d{1,2})', period_str)
+        if len(dates) >= 1:
+            start_y, start_m = int(dates[0][0]), int(dates[0][1])
             if "현재" in period_str or "재직" in period_str or len(dates) < 2:
                 import datetime
                 now = datetime.datetime.now()
                 end_y, end_m = now.year, now.month
             else:
-                end_y, end_m = map(int, dates[1])
-            
+                end_y, end_m = int(dates[1][0]), int(dates[1][1])
+
             return (end_y - start_y) * 12 + (end_m - start_m)
 
         # 4. 정규식 실패 시 숫자 합산 시도
@@ -470,8 +470,13 @@ class MatchingEngine:
             exp_score = 0.2 # 기본 경력 보유
             for exp in experiences:
                 period = str(exp.get('period', ''))
-                # 3년 이상 경력 시 가중치 최대
+                # 키워드 매칭 (DB 직접 입력: "(3년)", "(4년)" 등)
                 if any(kw in period for kw in ['36개월', '3년', '48개월', '4년', '5년', '60개월']):
+                    exp_score = 0.4
+                    break
+                # 키워드 없으면 실제 개월 수 계산 (프론트 ISO 날짜: "2022-01-15 ~ 2024-06-30")
+                calc_months = self._parse_period_to_months(period)
+                if calc_months >= 36:
                     exp_score = 0.4
                     break
         
